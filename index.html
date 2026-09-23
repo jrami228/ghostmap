@@ -1,0 +1,2842 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ghostmap</title>
+<style>
+:root{
+  --bg:#0d1015; --panel:#151a21; --panel2:#1b222b; --panel3:#222b36;
+  --line:#2a333f; --line2:#384554;
+  --txt:#dde5ee; --dim:#8996a6; --dim2:#66737f;
+  --acc:#5ec8dc; --acc-dk:#1d5460; --acc2:#e0a458; --danger:#e0685f;
+  --contents:#1b3a52;   /* dark baby blue — the Contents panel */
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--txt);font:13px/1.45 var(--ui);overflow:hidden;
+  display:grid;grid-template-columns:328px 1fr}
+button,input,select,textarea{font-family:inherit;font-size:13px;color:var(--txt)}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:var(--panel)}
+::-webkit-scrollbar-thumb{background:var(--line2);border:2px solid var(--panel);border-radius:6px}
+::-webkit-scrollbar-thumb:hover{background:#4c5b6c}
+
+/* ---------- sidebar ---------- */
+#side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.brand{padding:12px 14px 11px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:9px;flex:0 0 auto}
+.brand h1{margin:0;font-size:17px;letter-spacing:.10em;font-weight:600;text-transform:uppercase}
+.brand h1 span{color:var(--acc)}
+.brand small{color:var(--dim2);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
+#sidescroll{overflow-y:auto;overflow-x:hidden;flex:1 1 auto;min-height:0}
+.sec{border-bottom:1px solid var(--line)}
+.sec>summary{list-style:none;cursor:pointer;padding:9px 14px;font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--dim);display:flex;align-items:center;gap:7px;user-select:none}
+.sec>summary::-webkit-details-marker{display:none}
+.sec>summary:hover{color:var(--txt);background:var(--panel2)}
+.sec>summary:before{content:"";width:0;height:0;border:4px solid transparent;border-left-color:var(--dim2);transition:transform .12s}
+.sec[open]>summary:before{transform:rotate(90deg) translateX(-1px)}
+.secbody{padding:4px 14px 14px}
+.row{display:flex;gap:6px;align-items:center;margin-bottom:7px}
+.row.wrap{flex-wrap:wrap}
+label.f{flex:0 0 62px;color:var(--dim);font-size:11px;letter-spacing:.03em}
+.btn{background:var(--panel3);border:1px solid var(--line2);border-radius:5px;padding:6px 10px;cursor:pointer;
+  white-space:nowrap;transition:background .12s,border-color .12s}
+.btn:hover{background:#2c3846;border-color:#4a5a6c}
+.btn:active{background:#232d38}
+.btn.pri{background:var(--acc-dk);border-color:#2a6f7e;color:#d6f4fa}
+.btn.pri:hover{background:#25697a}
+.btn.sm{padding:4px 7px;font-size:12px}
+.btn.icon{padding:4px 0;width:26px;text-align:center;font-family:var(--mono)}
+.btn.grow{flex:1 1 auto}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.on{background:var(--acc-dk);border-color:#2a6f7e;color:#d6f4fa}
+#tips.act{color:var(--acc);background:rgba(19,24,31,.95);border:1px solid var(--acc-dk)}
+.multi{background:var(--panel2);border:1px solid var(--line2);border-radius:6px;padding:8px 9px;margin-bottom:9px;font-size:12px}
+input[type=text],input[type=number],select,textarea{background:#0f1319;border:1px solid var(--line2);border-radius:5px;
+  padding:5px 7px;width:100%;min-width:0}
+input[type=number]{font-family:var(--mono);text-align:right}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 2px rgba(94,200,220,.14)}
+input[type=color]{-webkit-appearance:none;appearance:none;background:none;border:1px solid var(--line2);border-radius:5px;
+  width:34px;height:26px;padding:2px;cursor:pointer;flex:0 0 auto}
+input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+input[type=color]::-webkit-color-swatch{border:none;border-radius:3px}
+input[type=range]{-webkit-appearance:none;appearance:none;background:none;height:18px;width:100%;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--line2);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--acc);margin-top:-5px;border:none}
+input[type=range]::-moz-range-track{height:3px;background:var(--line2);border-radius:2px}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border:none;border-radius:50%;background:var(--acc)}
+.hint{color:var(--dim2);font-size:11px;line-height:1.5}
+kbd{font-family:var(--mono);font-size:10.5px;background:#0f1319;border:1px solid var(--line2);
+  border-bottom-width:2px;border-radius:3px;padding:0 4px;color:var(--dim)}
+
+/* ---------- layer list ---------- */
+.sec{position:relative}
+.swbtn{margin-left:auto;width:26px;height:15px;padding:0;border-radius:4px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.32);background:var(--contents);flex:0 0 auto}
+.swbtn:hover{border-color:var(--acc)}
+.swbtn:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.cpop{display:none;position:absolute;right:12px;top:33px;z-index:14;width:196px;padding:10px;
+  background:var(--panel3);border:1px solid var(--line2);border-radius:7px;box-shadow:0 12px 30px rgba(0,0,0,.55)}
+.cpop.on{display:block}
+.cpop input[type=color]{width:44px;height:26px}
+#contents{background:var(--contents);border-top:1px solid rgba(255,255,255,.06)}
+#layers{display:flex;flex-direction:column;gap:5px;padding:9px 10px 12px}
+.lay{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:6px 7px 7px;cursor:default}
+.lay:hover{background:rgba(255,255,255,.11)}
+.lay.sel{border-color:var(--acc);background:rgba(94,200,220,.16);box-shadow:inset 0 0 0 1px rgba(94,200,220,.28)}
+.lay.drag{opacity:.35}
+.lay.over{border-top:2px solid var(--acc)}
+.lay .top{display:flex;align-items:center;gap:6px}
+.grip{cursor:grab;color:var(--dim2);font-size:12px;letter-spacing:-2px;flex:0 0 auto;padding:0 2px;line-height:1}
+.lname{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;font-size:12.5px}
+.lname .tag{font-family:var(--mono);font-size:9.5px;color:var(--dim2);text-transform:uppercase;margin-right:5px}
+.eye{flex:0 0 auto;width:22px;height:20px;border:none;background:none;color:var(--dim);cursor:pointer;border-radius:4px;
+  font-size:12px;line-height:1;padding:0}
+.eye:hover{background:var(--panel3);color:var(--txt)}
+.eye.off{color:var(--dim2);opacity:.45}
+.lay .bot{display:flex;align-items:center;gap:7px;margin-top:3px;padding-left:15px}
+.lay .bot input[type=range]{flex:1 1 auto}
+.opv{font-family:var(--mono);font-size:10.5px;color:var(--dim);width:31px;text-align:right;flex:0 0 auto}
+.empty{color:rgba(255,255,255,.45);font-size:12px;padding:2px 4px 10px;line-height:1.5}
+#props .empty,.secbody .empty{color:var(--dim2)}
+
+/* ---------- autosave bar ---------- */
+#saveline{flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel2);padding:7px 12px;
+  display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim)}
+#saveDot{width:7px;height:7px;border-radius:50%;background:var(--dim2);flex:0 0 auto;transition:background .2s}
+#saveDot.ok{background:#4bb87a}#saveDot.busy{background:var(--acc2)}#saveDot.bad{background:var(--danger)}
+#saveTxt{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- stage ---------- */
+#stage{position:relative;overflow:hidden;background:
+  linear-gradient(45deg,#12161c 25%,transparent 25%,transparent 75%,#12161c 75%),
+  linear-gradient(45deg,#12161c 25%,#0d1015 25%,#0d1015 75%,#12161c 75%);
+  background-size:18px 18px;background-position:0 0,9px 9px}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#hud{position:absolute;top:10px;right:12px;display:flex;gap:6px;align-items:center;
+  background:rgba(19,24,31,.93);border:1px solid var(--line2);border-radius:7px;padding:5px 7px;backdrop-filter:blur(4px)}
+#hud .zv{font-family:var(--mono);font-size:11.5px;color:var(--dim);width:44px;text-align:center}
+#hud .sep{width:1px;height:18px;background:var(--line2)}
+#tips{position:absolute;left:12px;bottom:11px;color:var(--dim2);font-size:11px;font-family:var(--mono);
+  background:rgba(19,24,31,.8);border-radius:5px;padding:3px 8px;pointer-events:none}
+#drop{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(13,16,21,.82);border:2px dashed var(--acc);color:var(--acc);font-size:15px;letter-spacing:.05em;z-index:5}
+#drop.on{display:flex}
+#editor{position:absolute;display:none;z-index:6;transform-origin:center center;background:#fff;color:#111;
+  border:1px solid var(--acc);border-radius:3px;resize:none;overflow:hidden;padding:6px;line-height:1.25;box-shadow:0 0 0 3px rgba(94,200,220,.3)}
+
+/* ---------- modal ---------- */
+#modal{position:fixed;inset:0;background:rgba(6,8,11,.72);display:none;align-items:center;justify-content:center;z-index:20}
+#modal.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:18px 20px;width:min(420px,92vw);
+  box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.card h3{margin:0 0 4px;font-size:14px;letter-spacing:.04em}
+.card p{margin:0 0 12px;color:var(--dim);font-size:12px}
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(14px);opacity:0;pointer-events:none;
+  background:var(--panel3);border:1px solid var(--line2);border-radius:6px;padding:8px 14px;font-size:12.5px;
+  transition:opacity .2s,transform .2s;z-index:30}
+#toast.on{opacity:1;transform:translateX(-50%)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<aside id="side">
+  <div class="brand"><h1>Ghost<span>map</span></h1><small>overlay &amp; markup</small></div>
+  <div id="sidescroll">
+
+    <details class="sec" open><summary>Add to map</summary>
+      <div class="secbody">
+        <div class="row">
+          <button class="btn pri grow" id="bAdd">Add PDF, TIFF or image&hellip;</button>
+        </div>
+        <div class="row">
+          <button class="btn grow" id="bCallout">Callout box</button>
+          <button class="btn grow" id="bMarker">Marker dot</button>
+        </div>
+        <div class="row"><label class="f">Symbol</label>
+          <select id="symSel"><option value="">Add a symbol&hellip;</option></select></div>
+        <div class="row"><label class="f">Dot size</label>
+          <button class="btn icon" id="mSdn">&minus;</button>
+          <input type="number" id="mSize" step="0.1" min="0.05" value="1.0">
+          <button class="btn icon" id="mSup">+</button>
+          <span class="hint">&times;</span></div>
+        <div class="row"><label class="f">Callout size</label>
+          <button class="btn icon" id="cSdn">&minus;</button>
+          <input type="number" id="cSize" step="0.1" min="0.05" value="1.0">
+          <button class="btn icon" id="cSup">+</button>
+          <span class="hint">&times;</span></div>
+        <div class="hint">Size applies to every dot / callout on the map at once.</div>
+        <div class="hint">Drop files anywhere on the map, or press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste an image from the clipboard as a new layer. Multi-page PDFs and TIFFs ask which pages you want.</div>
+        <input type="file" id="file" accept="application/pdf,image/*,.tif,.tiff" multiple hidden>
+      </div>
+    </details>
+
+    <details class="sec" open><summary>Contents
+        <button class="swbtn" id="cBtn" title="Contents colour"></button></summary>
+      <div class="cpop" id="cPop">
+        <div class="row" style="margin-bottom:8px"><input type="color" id="cBg" value="#1b3a52">
+          <span class="hint" style="flex:1 1 auto">Contents colour</span></div>
+        <div class="row" style="margin:0"><button class="btn sm grow" id="cBgReset">Reset to default</button></div>
+      </div>
+      <div id="contents">
+        <div id="layers"></div>
+      </div>
+    </details>
+
+    <details class="sec" open id="propsec"><summary>Selected layer</summary>
+      <div class="secbody" id="props"><div class="empty">Nothing selected. Click a layer on the map or in Contents.</div></div>
+    </details>
+
+    <details class="sec"><summary>Page &amp; export</summary>
+      <div class="secbody">
+        <div class="row"><label class="f">Size</label>
+          <select id="pgPreset">
+            <option value="792x612">Letter — landscape</option>
+            <option value="612x792">Letter — portrait</option>
+            <option value="1008x612">Legal — landscape</option>
+            <option value="612x1008">Legal — portrait</option>
+            <option value="1224x792">Tabloid — landscape</option>
+            <option value="792x1224">Tabloid — portrait</option>
+            <option value="842x595">A4 — landscape</option>
+            <option value="595x842">A4 — portrait</option>
+            <option value="custom">Custom</option>
+          </select></div>
+        <div class="row"><label class="f">W &times; H</label>
+          <input type="number" id="pgW" step="1" min="72"><span class="hint">&times;</span>
+          <input type="number" id="pgH" step="1" min="72"><span class="hint">pt</span></div>
+        <div class="row"><label class="f">Paper</label>
+          <input type="color" id="pgBg" value="#ffffff">
+          <button class="btn sm grow" id="bFitSel">Fit page to selected layer</button></div>
+        <div class="row"><label class="f">Quality</label>
+          <select id="expQ"><option value="2">2&times; &mdash; 144 dpi</option><option value="3" selected>3&times; &mdash; 216 dpi</option><option value="4">4&times; &mdash; 288 dpi</option></select></div>
+        <div class="row">
+          <button class="btn pri grow" id="bPDF">Export PDF</button>
+          <button class="btn" id="bPNG">PNG</button>
+        </div>
+        <div class="hint">The export contains exactly what sits inside the white page &mdash; ghosted overhang is trimmed.</div>
+      </div>
+    </details>
+
+    <details class="sec"><summary>Project</summary>
+      <div class="secbody">
+        <div class="row">
+          <button class="btn grow" id="bSave">Save project</button>
+          <button class="btn grow" id="bLoad">Open project</button>
+        </div>
+        <div class="row"><button class="btn pri grow" id="bHTML">Export session as HTML</button></div>
+        <input type="file" id="projFile" accept=".ghostmap,.json,.html" hidden>
+        <div class="hint">A <span style="font-family:var(--mono)">.ghostmap</span> file holds every layer, image and setting. The HTML export is a working copy of Ghostmap with this session baked in &mdash; open it anywhere and keep editing.</div>
+        <div class="row" style="margin-top:11px">
+          <button class="btn sm grow" id="bRestore">Restore last autosave</button>
+          <button class="btn sm" id="bClearAuto">Clear</button>
+        </div>
+      </div>
+    </details>
+
+    <details class="sec"><summary>Shortcuts</summary>
+      <div class="secbody hint" style="line-height:1.9">
+        <kbd>V</kbd> paste image &middot; <kbd>Del</kbd> delete layer<br>
+        <kbd>&larr;&uarr;&darr;&rarr;</kbd> nudge &middot; <kbd>Shift</kbd> nudge &times;10<br>
+        <kbd>[</kbd> <kbd>]</kbd> rotate 1&deg; &middot; with <kbd>Shift</kbd> 15&deg;<br>
+        <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate &middot; <kbd>Esc</kbd> deselect<br>
+        <kbd>Space</kbd>+drag or middle-drag to pan &middot; wheel to zoom<br>
+        Double-click a callout to edit its text
+      </div>
+    </details>
+  </div>
+  <div id="saveline"><span id="saveDot"></span><span id="saveTxt">Autosave starting&hellip;</span></div>
+</aside>
+
+<main id="stage">
+  <canvas id="cv"></canvas>
+  <textarea id="editor" spellcheck="false"></textarea>
+  <div id="hud">
+    <button class="btn icon" id="zOut" title="Zoom out">&minus;</button>
+    <div class="zv" id="zVal">100%</div>
+    <button class="btn icon" id="zIn" title="Zoom in">+</button>
+    <div class="sep"></div>
+    <button class="btn sm" id="zFit" title="Fit page in view">Fit</button>
+    <button class="btn sm" id="tGhost" title="Show layer content that hangs off the page">Overhang</button>
+  </div>
+  <div id="tips">Drop a PDF, TIFF or image to begin</div>
+  <div id="drop">Release to add as layers</div>
+</main>
+
+<div id="modal"><div class="card" id="modalCard"></div></div>
+<div id="toast"></div>
+
+<!-- Inlined so TIFF decoding works with no network:
+     pako 2.1.0 (MIT AND Zlib) https://github.com/nodeca/pako
+     UTIF.js 3.1.0 (MIT, Copyright (c) 2017 Photopea) https://github.com/photopea/UTIF.js -->
+<script>
+/*! pako 2.1.0 https://github.com/nodeca/pako @license (MIT AND Zlib) */
+!function(e,t){"object"==typeof exports&&"undefined"!=typeof module?t(exports):"function"==typeof define&&define.amd?define(["exports"],t):t((e="undefined"!=typeof globalThis?globalThis:e||self).pako={})}(this,(function(e){"use strict";var t=(e,t,i,n)=>{let a=65535&e|0,r=e>>>16&65535|0,o=0;for(;0!==i;){o=i>2e3?2e3:i,i-=o;do{a=a+t[n++]|0,r=r+a|0}while(--o);a%=65521,r%=65521}return a|r<<16|0};const i=new Uint32Array((()=>{let e,t=[];for(var i=0;i<256;i++){e=i;for(var n=0;n<8;n++)e=1&e?3988292384^e>>>1:e>>>1;t[i]=e}return t})());var n=(e,t,n,a)=>{const r=i,o=a+n;e^=-1;for(let i=a;i<o;i++)e=e>>>8^r[255&(e^t[i])];return-1^e};const a=16209;var r=function(e,t){let i,n,r,o,s,l,d,f,c,h,u,w,b,m,k,_,g,p,v,x,y,E,R,A;const Z=e.state;i=e.next_in,R=e.input,n=i+(e.avail_in-5),r=e.next_out,A=e.output,o=r-(t-e.avail_out),s=r+(e.avail_out-257),l=Z.dmax,d=Z.wsize,f=Z.whave,c=Z.wnext,h=Z.window,u=Z.hold,w=Z.bits,b=Z.lencode,m=Z.distcode,k=(1<<Z.lenbits)-1,_=(1<<Z.distbits)-1;e:do{w<15&&(u+=R[i++]<<w,w+=8,u+=R[i++]<<w,w+=8),g=b[u&k];t:for(;;){if(p=g>>>24,u>>>=p,w-=p,p=g>>>16&255,0===p)A[r++]=65535&g;else{if(!(16&p)){if(0==(64&p)){g=b[(65535&g)+(u&(1<<p)-1)];continue t}if(32&p){Z.mode=16191;break e}e.msg="invalid literal/length code",Z.mode=a;break e}v=65535&g,p&=15,p&&(w<p&&(u+=R[i++]<<w,w+=8),v+=u&(1<<p)-1,u>>>=p,w-=p),w<15&&(u+=R[i++]<<w,w+=8,u+=R[i++]<<w,w+=8),g=m[u&_];i:for(;;){if(p=g>>>24,u>>>=p,w-=p,p=g>>>16&255,!(16&p)){if(0==(64&p)){g=m[(65535&g)+(u&(1<<p)-1)];continue i}e.msg="invalid distance code",Z.mode=a;break e}if(x=65535&g,p&=15,w<p&&(u+=R[i++]<<w,w+=8,w<p&&(u+=R[i++]<<w,w+=8)),x+=u&(1<<p)-1,x>l){e.msg="invalid distance too far back",Z.mode=a;break e}if(u>>>=p,w-=p,p=r-o,x>p){if(p=x-p,p>f&&Z.sane){e.msg="invalid distance too far back",Z.mode=a;break e}if(y=0,E=h,0===c){if(y+=d-p,p<v){v-=p;do{A[r++]=h[y++]}while(--p);y=r-x,E=A}}else if(c<p){if(y+=d+c-p,p-=c,p<v){v-=p;do{A[r++]=h[y++]}while(--p);if(y=0,c<v){p=c,v-=p;do{A[r++]=h[y++]}while(--p);y=r-x,E=A}}}else if(y+=c-p,p<v){v-=p;do{A[r++]=h[y++]}while(--p);y=r-x,E=A}for(;v>2;)A[r++]=E[y++],A[r++]=E[y++],A[r++]=E[y++],v-=3;v&&(A[r++]=E[y++],v>1&&(A[r++]=E[y++]))}else{y=r-x;do{A[r++]=A[y++],A[r++]=A[y++],A[r++]=A[y++],v-=3}while(v>2);v&&(A[r++]=A[y++],v>1&&(A[r++]=A[y++]))}break}}break}}while(i<n&&r<s);v=w>>3,i-=v,w-=v<<3,u&=(1<<w)-1,e.next_in=i,e.next_out=r,e.avail_in=i<n?n-i+5:5-(i-n),e.avail_out=r<s?s-r+257:257-(r-s),Z.hold=u,Z.bits=w};const o=15,s=new Uint16Array([3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258,0,0]),l=new Uint8Array([16,16,16,16,16,16,16,16,17,17,17,17,18,18,18,18,19,19,19,19,20,20,20,20,21,21,21,21,16,72,78]),d=new Uint16Array([1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577,0,0]),f=new Uint8Array([16,16,16,16,17,17,18,18,19,19,20,20,21,21,22,22,23,23,24,24,25,25,26,26,27,27,28,28,29,29,64,64]);var c=(e,t,i,n,a,r,c,h)=>{const u=h.bits;let w,b,m,k,_,g,p=0,v=0,x=0,y=0,E=0,R=0,A=0,Z=0,S=0,T=0,O=null;const U=new Uint16Array(16),D=new Uint16Array(16);let I,B,N,C=null;for(p=0;p<=o;p++)U[p]=0;for(v=0;v<n;v++)U[t[i+v]]++;for(E=u,y=o;y>=1&&0===U[y];y--);if(E>y&&(E=y),0===y)return a[r++]=20971520,a[r++]=20971520,h.bits=1,0;for(x=1;x<y&&0===U[x];x++);for(E<x&&(E=x),Z=1,p=1;p<=o;p++)if(Z<<=1,Z-=U[p],Z<0)return-1;if(Z>0&&(0===e||1!==y))return-1;for(D[1]=0,p=1;p<o;p++)D[p+1]=D[p]+U[p];for(v=0;v<n;v++)0!==t[i+v]&&(c[D[t[i+v]]++]=v);if(0===e?(O=C=c,g=20):1===e?(O=s,C=l,g=257):(O=d,C=f,g=0),T=0,v=0,p=x,_=r,R=E,A=0,m=-1,S=1<<E,k=S-1,1===e&&S>852||2===e&&S>592)return 1;for(;;){I=p-A,c[v]+1<g?(B=0,N=c[v]):c[v]>=g?(B=C[c[v]-g],N=O[c[v]-g]):(B=96,N=0),w=1<<p-A,b=1<<R,x=b;do{b-=w,a[_+(T>>A)+b]=I<<24|B<<16|N|0}while(0!==b);for(w=1<<p-1;T&w;)w>>=1;if(0!==w?(T&=w-1,T+=w):T=0,v++,0==--U[p]){if(p===y)break;p=t[i+c[v]]}if(p>E&&(T&k)!==m){for(0===A&&(A=E),_+=x,R=p-A,Z=1<<R;R+A<y&&(Z-=U[R+A],!(Z<=0));)R++,Z<<=1;if(S+=1<<R,1===e&&S>852||2===e&&S>592)return 1;m=T&k,a[m]=E<<24|R<<16|_-r|0}}return 0!==T&&(a[_+T]=p-A<<24|64<<16|0),h.bits=E,0},h={Z_NO_FLUSH:0,Z_PARTIAL_FLUSH:1,Z_SYNC_FLUSH:2,Z_FULL_FLUSH:3,Z_FINISH:4,Z_BLOCK:5,Z_TREES:6,Z_OK:0,Z_STREAM_END:1,Z_NEED_DICT:2,Z_ERRNO:-1,Z_STREAM_ERROR:-2,Z_DATA_ERROR:-3,Z_MEM_ERROR:-4,Z_BUF_ERROR:-5,Z_NO_COMPRESSION:0,Z_BEST_SPEED:1,Z_BEST_COMPRESSION:9,Z_DEFAULT_COMPRESSION:-1,Z_FILTERED:1,Z_HUFFMAN_ONLY:2,Z_RLE:3,Z_FIXED:4,Z_DEFAULT_STRATEGY:0,Z_BINARY:0,Z_TEXT:1,Z_UNKNOWN:2,Z_DEFLATED:8};const{Z_FINISH:u,Z_BLOCK:w,Z_TREES:b,Z_OK:m,Z_STREAM_END:k,Z_NEED_DICT:_,Z_STREAM_ERROR:g,Z_DATA_ERROR:p,Z_MEM_ERROR:v,Z_BUF_ERROR:x,Z_DEFLATED:y}=h,E=16180,R=16190,A=16191,Z=16192,S=16194,T=16199,O=16200,U=16206,D=16209,I=e=>(e>>>24&255)+(e>>>8&65280)+((65280&e)<<8)+((255&e)<<24);function B(){this.strm=null,this.mode=0,this.last=!1,this.wrap=0,this.havedict=!1,this.flags=0,this.dmax=0,this.check=0,this.total=0,this.head=null,this.wbits=0,this.wsize=0,this.whave=0,this.wnext=0,this.window=null,this.hold=0,this.bits=0,this.length=0,this.offset=0,this.extra=0,this.lencode=null,this.distcode=null,this.lenbits=0,this.distbits=0,this.ncode=0,this.nlen=0,this.ndist=0,this.have=0,this.next=null,this.lens=new Uint16Array(320),this.work=new Uint16Array(288),this.lendyn=null,this.distdyn=null,this.sane=0,this.back=0,this.was=0}const N=e=>{if(!e)return 1;const t=e.state;return!t||t.strm!==e||t.mode<E||t.mode>16211?1:0},C=e=>{if(N(e))return g;const t=e.state;return e.total_in=e.total_out=t.total=0,e.msg="",t.wrap&&(e.adler=1&t.wrap),t.mode=E,t.last=0,t.havedict=0,t.flags=-1,t.dmax=32768,t.head=null,t.hold=0,t.bits=0,t.lencode=t.lendyn=new Int32Array(852),t.distcode=t.distdyn=new Int32Array(592),t.sane=1,t.back=-1,m},z=e=>{if(N(e))return g;const t=e.state;return t.wsize=0,t.whave=0,t.wnext=0,C(e)},F=(e,t)=>{let i;if(N(e))return g;const n=e.state;return t<0?(i=0,t=-t):(i=5+(t>>4),t<48&&(t&=15)),t&&(t<8||t>15)?g:(null!==n.window&&n.wbits!==t&&(n.window=null),n.wrap=i,n.wbits=t,z(e))},L=(e,t)=>{if(!e)return g;const i=new B;e.state=i,i.strm=e,i.window=null,i.mode=E;const n=F(e,t);return n!==m&&(e.state=null),n};let M,H,j=!0;const K=e=>{if(j){M=new Int32Array(512),H=new Int32Array(32);let t=0;for(;t<144;)e.lens[t++]=8;for(;t<256;)e.lens[t++]=9;for(;t<280;)e.lens[t++]=7;for(;t<288;)e.lens[t++]=8;for(c(1,e.lens,0,288,M,0,e.work,{bits:9}),t=0;t<32;)e.lens[t++]=5;c(2,e.lens,0,32,H,0,e.work,{bits:5}),j=!1}e.lencode=M,e.lenbits=9,e.distcode=H,e.distbits=5},P=(e,t,i,n)=>{let a;const r=e.state;return null===r.window&&(r.wsize=1<<r.wbits,r.wnext=0,r.whave=0,r.window=new Uint8Array(r.wsize)),n>=r.wsize?(r.window.set(t.subarray(i-r.wsize,i),0),r.wnext=0,r.whave=r.wsize):(a=r.wsize-r.wnext,a>n&&(a=n),r.window.set(t.subarray(i-n,i-n+a),r.wnext),(n-=a)?(r.window.set(t.subarray(i-n,i),0),r.wnext=n,r.whave=r.wsize):(r.wnext+=a,r.wnext===r.wsize&&(r.wnext=0),r.whave<r.wsize&&(r.whave+=a))),0};var Y={inflateReset:z,inflateReset2:F,inflateResetKeep:C,inflateInit:e=>L(e,15),inflateInit2:L,inflate:(e,i)=>{let a,o,s,l,d,f,h,B,C,z,F,L,M,H,j,Y,G,X,W,q,J,Q,V=0;const $=new Uint8Array(4);let ee,te;const ie=new Uint8Array([16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15]);if(N(e)||!e.output||!e.input&&0!==e.avail_in)return g;a=e.state,a.mode===A&&(a.mode=Z),d=e.next_out,s=e.output,h=e.avail_out,l=e.next_in,o=e.input,f=e.avail_in,B=a.hold,C=a.bits,z=f,F=h,Q=m;e:for(;;)switch(a.mode){case E:if(0===a.wrap){a.mode=Z;break}for(;C<16;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}if(2&a.wrap&&35615===B){0===a.wbits&&(a.wbits=15),a.check=0,$[0]=255&B,$[1]=B>>>8&255,a.check=n(a.check,$,2,0),B=0,C=0,a.mode=16181;break}if(a.head&&(a.head.done=!1),!(1&a.wrap)||(((255&B)<<8)+(B>>8))%31){e.msg="incorrect header check",a.mode=D;break}if((15&B)!==y){e.msg="unknown compression method",a.mode=D;break}if(B>>>=4,C-=4,J=8+(15&B),0===a.wbits&&(a.wbits=J),J>15||J>a.wbits){e.msg="invalid window size",a.mode=D;break}a.dmax=1<<a.wbits,a.flags=0,e.adler=a.check=1,a.mode=512&B?16189:A,B=0,C=0;break;case 16181:for(;C<16;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}if(a.flags=B,(255&a.flags)!==y){e.msg="unknown compression method",a.mode=D;break}if(57344&a.flags){e.msg="unknown header flags set",a.mode=D;break}a.head&&(a.head.text=B>>8&1),512&a.flags&&4&a.wrap&&($[0]=255&B,$[1]=B>>>8&255,a.check=n(a.check,$,2,0)),B=0,C=0,a.mode=16182;case 16182:for(;C<32;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}a.head&&(a.head.time=B),512&a.flags&&4&a.wrap&&($[0]=255&B,$[1]=B>>>8&255,$[2]=B>>>16&255,$[3]=B>>>24&255,a.check=n(a.check,$,4,0)),B=0,C=0,a.mode=16183;case 16183:for(;C<16;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}a.head&&(a.head.xflags=255&B,a.head.os=B>>8),512&a.flags&&4&a.wrap&&($[0]=255&B,$[1]=B>>>8&255,a.check=n(a.check,$,2,0)),B=0,C=0,a.mode=16184;case 16184:if(1024&a.flags){for(;C<16;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}a.length=B,a.head&&(a.head.extra_len=B),512&a.flags&&4&a.wrap&&($[0]=255&B,$[1]=B>>>8&255,a.check=n(a.check,$,2,0)),B=0,C=0}else a.head&&(a.head.extra=null);a.mode=16185;case 16185:if(1024&a.flags&&(L=a.length,L>f&&(L=f),L&&(a.head&&(J=a.head.extra_len-a.length,a.head.extra||(a.head.extra=new Uint8Array(a.head.extra_len)),a.head.extra.set(o.subarray(l,l+L),J)),512&a.flags&&4&a.wrap&&(a.check=n(a.check,o,L,l)),f-=L,l+=L,a.length-=L),a.length))break e;a.length=0,a.mode=16186;case 16186:if(2048&a.flags){if(0===f)break e;L=0;do{J=o[l+L++],a.head&&J&&a.length<65536&&(a.head.name+=String.fromCharCode(J))}while(J&&L<f);if(512&a.flags&&4&a.wrap&&(a.check=n(a.check,o,L,l)),f-=L,l+=L,J)break e}else a.head&&(a.head.name=null);a.length=0,a.mode=16187;case 16187:if(4096&a.flags){if(0===f)break e;L=0;do{J=o[l+L++],a.head&&J&&a.length<65536&&(a.head.comment+=String.fromCharCode(J))}while(J&&L<f);if(512&a.flags&&4&a.wrap&&(a.check=n(a.check,o,L,l)),f-=L,l+=L,J)break e}else a.head&&(a.head.comment=null);a.mode=16188;case 16188:if(512&a.flags){for(;C<16;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}if(4&a.wrap&&B!==(65535&a.check)){e.msg="header crc mismatch",a.mode=D;break}B=0,C=0}a.head&&(a.head.hcrc=a.flags>>9&1,a.head.done=!0),e.adler=a.check=0,a.mode=A;break;case 16189:for(;C<32;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}e.adler=a.check=I(B),B=0,C=0,a.mode=R;case R:if(0===a.havedict)return e.next_out=d,e.avail_out=h,e.next_in=l,e.avail_in=f,a.hold=B,a.bits=C,_;e.adler=a.check=1,a.mode=A;case A:if(i===w||i===b)break e;case Z:if(a.last){B>>>=7&C,C-=7&C,a.mode=U;break}for(;C<3;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}switch(a.last=1&B,B>>>=1,C-=1,3&B){case 0:a.mode=16193;break;case 1:if(K(a),a.mode=T,i===b){B>>>=2,C-=2;break e}break;case 2:a.mode=16196;break;case 3:e.msg="invalid block type",a.mode=D}B>>>=2,C-=2;break;case 16193:for(B>>>=7&C,C-=7&C;C<32;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}if((65535&B)!=(B>>>16^65535)){e.msg="invalid stored block lengths",a.mode=D;break}if(a.length=65535&B,B=0,C=0,a.mode=S,i===b)break e;case S:a.mode=16195;case 16195:if(L=a.length,L){if(L>f&&(L=f),L>h&&(L=h),0===L)break e;s.set(o.subarray(l,l+L),d),f-=L,l+=L,h-=L,d+=L,a.length-=L;break}a.mode=A;break;case 16196:for(;C<14;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}if(a.nlen=257+(31&B),B>>>=5,C-=5,a.ndist=1+(31&B),B>>>=5,C-=5,a.ncode=4+(15&B),B>>>=4,C-=4,a.nlen>286||a.ndist>30){e.msg="too many length or distance symbols",a.mode=D;break}a.have=0,a.mode=16197;case 16197:for(;a.have<a.ncode;){for(;C<3;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}a.lens[ie[a.have++]]=7&B,B>>>=3,C-=3}for(;a.have<19;)a.lens[ie[a.have++]]=0;if(a.lencode=a.lendyn,a.lenbits=7,ee={bits:a.lenbits},Q=c(0,a.lens,0,19,a.lencode,0,a.work,ee),a.lenbits=ee.bits,Q){e.msg="invalid code lengths set",a.mode=D;break}a.have=0,a.mode=16198;case 16198:for(;a.have<a.nlen+a.ndist;){for(;V=a.lencode[B&(1<<a.lenbits)-1],j=V>>>24,Y=V>>>16&255,G=65535&V,!(j<=C);){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}if(G<16)B>>>=j,C-=j,a.lens[a.have++]=G;else{if(16===G){for(te=j+2;C<te;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}if(B>>>=j,C-=j,0===a.have){e.msg="invalid bit length repeat",a.mode=D;break}J=a.lens[a.have-1],L=3+(3&B),B>>>=2,C-=2}else if(17===G){for(te=j+3;C<te;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}B>>>=j,C-=j,J=0,L=3+(7&B),B>>>=3,C-=3}else{for(te=j+7;C<te;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}B>>>=j,C-=j,J=0,L=11+(127&B),B>>>=7,C-=7}if(a.have+L>a.nlen+a.ndist){e.msg="invalid bit length repeat",a.mode=D;break}for(;L--;)a.lens[a.have++]=J}}if(a.mode===D)break;if(0===a.lens[256]){e.msg="invalid code -- missing end-of-block",a.mode=D;break}if(a.lenbits=9,ee={bits:a.lenbits},Q=c(1,a.lens,0,a.nlen,a.lencode,0,a.work,ee),a.lenbits=ee.bits,Q){e.msg="invalid literal/lengths set",a.mode=D;break}if(a.distbits=6,a.distcode=a.distdyn,ee={bits:a.distbits},Q=c(2,a.lens,a.nlen,a.ndist,a.distcode,0,a.work,ee),a.distbits=ee.bits,Q){e.msg="invalid distances set",a.mode=D;break}if(a.mode=T,i===b)break e;case T:a.mode=O;case O:if(f>=6&&h>=258){e.next_out=d,e.avail_out=h,e.next_in=l,e.avail_in=f,a.hold=B,a.bits=C,r(e,F),d=e.next_out,s=e.output,h=e.avail_out,l=e.next_in,o=e.input,f=e.avail_in,B=a.hold,C=a.bits,a.mode===A&&(a.back=-1);break}for(a.back=0;V=a.lencode[B&(1<<a.lenbits)-1],j=V>>>24,Y=V>>>16&255,G=65535&V,!(j<=C);){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}if(Y&&0==(240&Y)){for(X=j,W=Y,q=G;V=a.lencode[q+((B&(1<<X+W)-1)>>X)],j=V>>>24,Y=V>>>16&255,G=65535&V,!(X+j<=C);){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}B>>>=X,C-=X,a.back+=X}if(B>>>=j,C-=j,a.back+=j,a.length=G,0===Y){a.mode=16205;break}if(32&Y){a.back=-1,a.mode=A;break}if(64&Y){e.msg="invalid literal/length code",a.mode=D;break}a.extra=15&Y,a.mode=16201;case 16201:if(a.extra){for(te=a.extra;C<te;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}a.length+=B&(1<<a.extra)-1,B>>>=a.extra,C-=a.extra,a.back+=a.extra}a.was=a.length,a.mode=16202;case 16202:for(;V=a.distcode[B&(1<<a.distbits)-1],j=V>>>24,Y=V>>>16&255,G=65535&V,!(j<=C);){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}if(0==(240&Y)){for(X=j,W=Y,q=G;V=a.distcode[q+((B&(1<<X+W)-1)>>X)],j=V>>>24,Y=V>>>16&255,G=65535&V,!(X+j<=C);){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}B>>>=X,C-=X,a.back+=X}if(B>>>=j,C-=j,a.back+=j,64&Y){e.msg="invalid distance code",a.mode=D;break}a.offset=G,a.extra=15&Y,a.mode=16203;case 16203:if(a.extra){for(te=a.extra;C<te;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}a.offset+=B&(1<<a.extra)-1,B>>>=a.extra,C-=a.extra,a.back+=a.extra}if(a.offset>a.dmax){e.msg="invalid distance too far back",a.mode=D;break}a.mode=16204;case 16204:if(0===h)break e;if(L=F-h,a.offset>L){if(L=a.offset-L,L>a.whave&&a.sane){e.msg="invalid distance too far back",a.mode=D;break}L>a.wnext?(L-=a.wnext,M=a.wsize-L):M=a.wnext-L,L>a.length&&(L=a.length),H=a.window}else H=s,M=d-a.offset,L=a.length;L>h&&(L=h),h-=L,a.length-=L;do{s[d++]=H[M++]}while(--L);0===a.length&&(a.mode=O);break;case 16205:if(0===h)break e;s[d++]=a.length,h--,a.mode=O;break;case U:if(a.wrap){for(;C<32;){if(0===f)break e;f--,B|=o[l++]<<C,C+=8}if(F-=h,e.total_out+=F,a.total+=F,4&a.wrap&&F&&(e.adler=a.check=a.flags?n(a.check,s,F,d-F):t(a.check,s,F,d-F)),F=h,4&a.wrap&&(a.flags?B:I(B))!==a.check){e.msg="incorrect data check",a.mode=D;break}B=0,C=0}a.mode=16207;case 16207:if(a.wrap&&a.flags){for(;C<32;){if(0===f)break e;f--,B+=o[l++]<<C,C+=8}if(4&a.wrap&&B!==(4294967295&a.total)){e.msg="incorrect length check",a.mode=D;break}B=0,C=0}a.mode=16208;case 16208:Q=k;break e;case D:Q=p;break e;case 16210:return v;default:return g}return e.next_out=d,e.avail_out=h,e.next_in=l,e.avail_in=f,a.hold=B,a.bits=C,(a.wsize||F!==e.avail_out&&a.mode<D&&(a.mode<U||i!==u))&&P(e,e.output,e.next_out,F-e.avail_out),z-=e.avail_in,F-=e.avail_out,e.total_in+=z,e.total_out+=F,a.total+=F,4&a.wrap&&F&&(e.adler=a.check=a.flags?n(a.check,s,F,e.next_out-F):t(a.check,s,F,e.next_out-F)),e.data_type=a.bits+(a.last?64:0)+(a.mode===A?128:0)+(a.mode===T||a.mode===S?256:0),(0===z&&0===F||i===u)&&Q===m&&(Q=x),Q},inflateEnd:e=>{if(N(e))return g;let t=e.state;return t.window&&(t.window=null),e.state=null,m},inflateGetHeader:(e,t)=>{if(N(e))return g;const i=e.state;return 0==(2&i.wrap)?g:(i.head=t,t.done=!1,m)},inflateSetDictionary:(e,i)=>{const n=i.length;let a,r,o;return N(e)?g:(a=e.state,0!==a.wrap&&a.mode!==R?g:a.mode===R&&(r=1,r=t(r,i,n,0),r!==a.check)?p:(o=P(e,i,n,n),o?(a.mode=16210,v):(a.havedict=1,m)))},inflateInfo:"pako inflate (from Nodeca project)"};const G=(e,t)=>Object.prototype.hasOwnProperty.call(e,t);var X=function(e){const t=Array.prototype.slice.call(arguments,1);for(;t.length;){const i=t.shift();if(i){if("object"!=typeof i)throw new TypeError(i+"must be non-object");for(const t in i)G(i,t)&&(e[t]=i[t])}}return e},W=e=>{let t=0;for(let i=0,n=e.length;i<n;i++)t+=e[i].length;const i=new Uint8Array(t);for(let t=0,n=0,a=e.length;t<a;t++){let a=e[t];i.set(a,n),n+=a.length}return i};let q=!0;try{String.fromCharCode.apply(null,new Uint8Array(1))}catch(e){q=!1}const J=new Uint8Array(256);for(let e=0;e<256;e++)J[e]=e>=252?6:e>=248?5:e>=240?4:e>=224?3:e>=192?2:1;J[254]=J[254]=1;var Q=e=>{if("function"==typeof TextEncoder&&TextEncoder.prototype.encode)return(new TextEncoder).encode(e);let t,i,n,a,r,o=e.length,s=0;for(a=0;a<o;a++)i=e.charCodeAt(a),55296==(64512&i)&&a+1<o&&(n=e.charCodeAt(a+1),56320==(64512&n)&&(i=65536+(i-55296<<10)+(n-56320),a++)),s+=i<128?1:i<2048?2:i<65536?3:4;for(t=new Uint8Array(s),r=0,a=0;r<s;a++)i=e.charCodeAt(a),55296==(64512&i)&&a+1<o&&(n=e.charCodeAt(a+1),56320==(64512&n)&&(i=65536+(i-55296<<10)+(n-56320),a++)),i<128?t[r++]=i:i<2048?(t[r++]=192|i>>>6,t[r++]=128|63&i):i<65536?(t[r++]=224|i>>>12,t[r++]=128|i>>>6&63,t[r++]=128|63&i):(t[r++]=240|i>>>18,t[r++]=128|i>>>12&63,t[r++]=128|i>>>6&63,t[r++]=128|63&i);return t},V=(e,t)=>{const i=t||e.length;if("function"==typeof TextDecoder&&TextDecoder.prototype.decode)return(new TextDecoder).decode(e.subarray(0,t));let n,a;const r=new Array(2*i);for(a=0,n=0;n<i;){let t=e[n++];if(t<128){r[a++]=t;continue}let o=J[t];if(o>4)r[a++]=65533,n+=o-1;else{for(t&=2===o?31:3===o?15:7;o>1&&n<i;)t=t<<6|63&e[n++],o--;o>1?r[a++]=65533:t<65536?r[a++]=t:(t-=65536,r[a++]=55296|t>>10&1023,r[a++]=56320|1023&t)}}return((e,t)=>{if(t<65534&&e.subarray&&q)return String.fromCharCode.apply(null,e.length===t?e:e.subarray(0,t));let i="";for(let n=0;n<t;n++)i+=String.fromCharCode(e[n]);return i})(r,a)},$=(e,t)=>{(t=t||e.length)>e.length&&(t=e.length);let i=t-1;for(;i>=0&&128==(192&e[i]);)i--;return i<0||0===i?t:i+J[e[i]]>t?i:t},ee={2:"need dictionary",1:"stream end",0:"","-1":"file error","-2":"stream error","-3":"data error","-4":"insufficient memory","-5":"buffer error","-6":"incompatible version"};var te=function(){this.input=null,this.next_in=0,this.avail_in=0,this.total_in=0,this.output=null,this.next_out=0,this.avail_out=0,this.total_out=0,this.msg="",this.state=null,this.data_type=2,this.adler=0};var ie=function(){this.text=0,this.time=0,this.xflags=0,this.os=0,this.extra=null,this.extra_len=0,this.name="",this.comment="",this.hcrc=0,this.done=!1};const ne=Object.prototype.toString,{Z_NO_FLUSH:ae,Z_FINISH:re,Z_OK:oe,Z_STREAM_END:se,Z_NEED_DICT:le,Z_STREAM_ERROR:de,Z_DATA_ERROR:fe,Z_MEM_ERROR:ce}=h;function he(e){this.options=X({chunkSize:65536,windowBits:15,to:""},e||{});const t=this.options;t.raw&&t.windowBits>=0&&t.windowBits<16&&(t.windowBits=-t.windowBits,0===t.windowBits&&(t.windowBits=-15)),!(t.windowBits>=0&&t.windowBits<16)||e&&e.windowBits||(t.windowBits+=32),t.windowBits>15&&t.windowBits<48&&0==(15&t.windowBits)&&(t.windowBits|=15),this.err=0,this.msg="",this.ended=!1,this.chunks=[],this.strm=new te,this.strm.avail_out=0;let i=Y.inflateInit2(this.strm,t.windowBits);if(i!==oe)throw new Error(ee[i]);if(this.header=new ie,Y.inflateGetHeader(this.strm,this.header),t.dictionary&&("string"==typeof t.dictionary?t.dictionary=Q(t.dictionary):"[object ArrayBuffer]"===ne.call(t.dictionary)&&(t.dictionary=new Uint8Array(t.dictionary)),t.raw&&(i=Y.inflateSetDictionary(this.strm,t.dictionary),i!==oe)))throw new Error(ee[i])}function ue(e,t){const i=new he(t);if(i.push(e),i.err)throw i.msg||ee[i.err];return i.result}he.prototype.push=function(e,t){const i=this.strm,n=this.options.chunkSize,a=this.options.dictionary;let r,o,s;if(this.ended)return!1;for(o=t===~~t?t:!0===t?re:ae,"[object ArrayBuffer]"===ne.call(e)?i.input=new Uint8Array(e):i.input=e,i.next_in=0,i.avail_in=i.input.length;;){for(0===i.avail_out&&(i.output=new Uint8Array(n),i.next_out=0,i.avail_out=n),r=Y.inflate(i,o),r===le&&a&&(r=Y.inflateSetDictionary(i,a),r===oe?r=Y.inflate(i,o):r===fe&&(r=le));i.avail_in>0&&r===se&&i.state.wrap>0&&0!==e[i.next_in];)Y.inflateReset(i),r=Y.inflate(i,o);switch(r){case de:case fe:case le:case ce:return this.onEnd(r),this.ended=!0,!1}if(s=i.avail_out,i.next_out&&(0===i.avail_out||r===se))if("string"===this.options.to){let e=$(i.output,i.next_out),t=i.next_out-e,a=V(i.output,e);i.next_out=t,i.avail_out=n-t,t&&i.output.set(i.output.subarray(e,e+t),0),this.onData(a)}else this.onData(i.output.length===i.next_out?i.output:i.output.subarray(0,i.next_out));if(r!==oe||0!==s){if(r===se)return r=Y.inflateEnd(this.strm),this.onEnd(r),this.ended=!0,!0;if(0===i.avail_in)break}}return!0},he.prototype.onData=function(e){this.chunks.push(e)},he.prototype.onEnd=function(e){e===oe&&("string"===this.options.to?this.result=this.chunks.join(""):this.result=W(this.chunks)),this.chunks=[],this.err=e,this.msg=this.strm.msg};var we=he,be=ue,me=function(e,t){return(t=t||{}).raw=!0,ue(e,t)},ke=ue,_e=h,ge={Inflate:we,inflate:be,inflateRaw:me,ungzip:ke,constants:_e};e.Inflate=we,e.constants=_e,e.default=ge,e.inflate=be,e.inflateRaw=me,e.ungzip=ke,Object.defineProperty(e,"__esModule",{value:!0})}));
+</script>
+<script>
+;(function(){
+var UTIF = {};
+
+// Make available for import by `require()`
+if (typeof module == "object") {module.exports = UTIF;}
+else {self.UTIF = UTIF;}
+
+var pako;
+if (typeof require == "function") {pako = require("pako");}
+else {pako = self.pako;}
+
+function log() { if (typeof process=="undefined" || process.env.NODE_ENV=="development") console.log.apply(console, arguments);  }
+
+(function(UTIF, pako){
+	
+// Following lines add a JPEG decoder  to UTIF.JpegDecoder
+(function(){var V="function"===typeof Symbol&&"symbol"===typeof Symbol.iterator?function(g){return typeof g}:function(g){return g&&"function"===typeof Symbol&&g.constructor===Symbol&&g!==Symbol.prototype?"symbol":typeof g},D=function(){function g(g){this.message="JPEG error: "+g}g.prototype=Error();g.prototype.name="JpegError";return g.constructor=g}(),P=function(){function g(g,D){this.message=g;this.g=D}g.prototype=Error();g.prototype.name="DNLMarkerError";return g.constructor=g}();(function(){function g(){this.M=
+null;this.B=-1}function W(a,d){for(var f=0,e=[],b,B,k=16;0<k&&!a[k-1];)k--;e.push({children:[],index:0});var l=e[0],r;for(b=0;b<k;b++){for(B=0;B<a[b];B++){l=e.pop();for(l.children[l.index]=d[f];0<l.index;)l=e.pop();l.index++;for(e.push(l);e.length<=b;)e.push(r={children:[],index:0}),l.children[l.index]=r.children,l=r;f++}b+1<k&&(e.push(r={children:[],index:0}),l.children[l.index]=r.children,l=r)}return e[0].children}function X(a,d,f,e,b,B,k,l,r){function n(){if(0<x)return x--,z>>x&1;z=a[d++];if(255===
+z){var c=a[d++];if(c){if(220===c&&g){d+=2;var b=a[d++]<<8|a[d++];if(0<b&&b!==f.g)throw new P("Found DNL marker (0xFFDC) while parsing scan data",b);}throw new D("unexpected marker "+(z<<8|c).toString(16));}}x=7;return z>>>7}function q(a){for(;;){a=a[n()];if("number"===typeof a)return a;if("object"!==("undefined"===typeof a?"undefined":V(a)))throw new D("invalid huffman sequence");}}function h(a){for(var c=0;0<a;)c=c<<1|n(),a--;return c}function c(a){if(1===a)return 1===n()?1:-1;var c=h(a);return c>=
+1<<a-1?c:c+(-1<<a)+1}function C(a,b){var d=q(a.D);d=0===d?0:c(d);a.a[b]=a.m+=d;for(d=1;64>d;){var h=q(a.o),k=h&15;h>>=4;if(0===k){if(15>h)break;d+=16}else d+=h,a.a[b+J[d]]=c(k),d++}}function w(a,d){var b=q(a.D);b=0===b?0:c(b)<<r;a.a[d]=a.m+=b}function p(a,c){a.a[c]|=n()<<r}function m(a,b){if(0<A)A--;else for(var d=B;d<=k;){var e=q(a.o),f=e&15;e>>=4;if(0===f){if(15>e){A=h(e)+(1<<e)-1;break}d+=16}else d+=e,a.a[b+J[d]]=c(f)*(1<<r),d++}}function t(a,d){for(var b=B,e=0,f;b<=k;){f=d+J[b];var l=0>a.a[f]?
+-1:1;switch(E){case 0:e=q(a.o);f=e&15;e>>=4;if(0===f)15>e?(A=h(e)+(1<<e),E=4):(e=16,E=1);else{if(1!==f)throw new D("invalid ACn encoding");Q=c(f);E=e?2:3}continue;case 1:case 2:a.a[f]?a.a[f]+=l*(n()<<r):(e--,0===e&&(E=2===E?3:0));break;case 3:a.a[f]?a.a[f]+=l*(n()<<r):(a.a[f]=Q<<r,E=0);break;case 4:a.a[f]&&(a.a[f]+=l*(n()<<r))}b++}4===E&&(A--,0===A&&(E=0))}var g=9<arguments.length&&void 0!==arguments[9]?arguments[9]:!1,u=f.P,v=d,z=0,x=0,A=0,E=0,Q,K=e.length,F,L,M,I;var R=f.S?0===B?0===l?w:p:0===l?
+m:t:C;var G=0;var O=1===K?e[0].c*e[0].l:u*f.O;for(var S,T;G<O;){var U=b?Math.min(O-G,b):O;for(F=0;F<K;F++)e[F].m=0;A=0;if(1===K){var y=e[0];for(I=0;I<U;I++)R(y,64*((y.c+1)*(G/y.c|0)+G%y.c)),G++}else for(I=0;I<U;I++){for(F=0;F<K;F++)for(y=e[F],S=y.h,T=y.j,L=0;L<T;L++)for(M=0;M<S;M++)R(y,64*((y.c+1)*((G/u|0)*y.j+L)+(G%u*y.h+M)));G++}x=0;(y=N(a,d))&&y.f&&((0,_util.warn)("decodeScan - unexpected MCU data, current marker is: "+y.f),d=y.offset);y=y&&y.F;if(!y||65280>=y)throw new D("marker was not found");
+if(65488<=y&&65495>=y)d+=2;else break}(y=N(a,d))&&y.f&&((0,_util.warn)("decodeScan - unexpected Scan data, current marker is: "+y.f),d=y.offset);return d-v}function Y(a,d){for(var f=d.c,e=d.l,b=new Int16Array(64),B=0;B<e;B++)for(var k=0;k<f;k++){var l=64*((d.c+1)*B+k),r=b,n=d.G,q=d.a;if(!n)throw new D("missing required Quantization Table.");for(var h=0;64>h;h+=8){var c=q[l+h];var C=q[l+h+1];var w=q[l+h+2];var p=q[l+h+3];var m=q[l+h+4];var t=q[l+h+5];var g=q[l+h+6];var u=q[l+h+7];c*=n[h];if(0===(C|
+w|p|m|t|g|u))c=5793*c+512>>10,r[h]=c,r[h+1]=c,r[h+2]=c,r[h+3]=c,r[h+4]=c,r[h+5]=c,r[h+6]=c,r[h+7]=c;else{C*=n[h+1];w*=n[h+2];p*=n[h+3];m*=n[h+4];t*=n[h+5];g*=n[h+6];u*=n[h+7];var v=5793*c+128>>8;var z=5793*m+128>>8;var x=w;var A=g;m=2896*(C-u)+128>>8;u=2896*(C+u)+128>>8;p<<=4;t<<=4;v=v+z+1>>1;z=v-z;c=3784*x+1567*A+128>>8;x=1567*x-3784*A+128>>8;A=c;m=m+t+1>>1;t=m-t;u=u+p+1>>1;p=u-p;v=v+A+1>>1;A=v-A;z=z+x+1>>1;x=z-x;c=2276*m+3406*u+2048>>12;m=3406*m-2276*u+2048>>12;u=c;c=799*p+4017*t+2048>>12;p=4017*
+p-799*t+2048>>12;t=c;r[h]=v+u;r[h+7]=v-u;r[h+1]=z+t;r[h+6]=z-t;r[h+2]=x+p;r[h+5]=x-p;r[h+3]=A+m;r[h+4]=A-m}}for(n=0;8>n;++n)c=r[n],C=r[n+8],w=r[n+16],p=r[n+24],m=r[n+32],t=r[n+40],g=r[n+48],u=r[n+56],0===(C|w|p|m|t|g|u)?(c=5793*c+8192>>14,c=-2040>c?0:2024<=c?255:c+2056>>4,q[l+n]=c,q[l+n+8]=c,q[l+n+16]=c,q[l+n+24]=c,q[l+n+32]=c,q[l+n+40]=c,q[l+n+48]=c,q[l+n+56]=c):(v=5793*c+2048>>12,z=5793*m+2048>>12,x=w,A=g,m=2896*(C-u)+2048>>12,u=2896*(C+u)+2048>>12,v=(v+z+1>>1)+4112,z=v-z,c=3784*x+1567*A+2048>>
+12,x=1567*x-3784*A+2048>>12,A=c,m=m+t+1>>1,t=m-t,u=u+p+1>>1,p=u-p,v=v+A+1>>1,A=v-A,z=z+x+1>>1,x=z-x,c=2276*m+3406*u+2048>>12,m=3406*m-2276*u+2048>>12,u=c,c=799*p+4017*t+2048>>12,p=4017*p-799*t+2048>>12,t=c,c=v+u,u=v-u,C=z+t,g=z-t,w=x+p,t=x-p,p=A+m,m=A-m,c=16>c?0:4080<=c?255:c>>4,C=16>C?0:4080<=C?255:C>>4,w=16>w?0:4080<=w?255:w>>4,p=16>p?0:4080<=p?255:p>>4,m=16>m?0:4080<=m?255:m>>4,t=16>t?0:4080<=t?255:t>>4,g=16>g?0:4080<=g?255:g>>4,u=16>u?0:4080<=u?255:u>>4,q[l+n]=c,q[l+n+8]=C,q[l+n+16]=w,q[l+n+24]=
+p,q[l+n+32]=m,q[l+n+40]=t,q[l+n+48]=g,q[l+n+56]=u)}return d.a}function N(a,d){var f=2<arguments.length&&void 0!==arguments[2]?arguments[2]:d,e=a.length-1;f=f<d?f:d;if(d>=e)return null;var b=a[d]<<8|a[d+1];if(65472<=b&&65534>=b)return{f:null,F:b,offset:d};for(var B=a[f]<<8|a[f+1];!(65472<=B&&65534>=B);){if(++f>=e)return null;B=a[f]<<8|a[f+1]}return{f:b.toString(16),F:B,offset:f}}var J=new Uint8Array([0,1,8,16,9,2,3,10,17,24,32,25,18,11,4,5,12,19,26,33,40,48,41,34,27,20,13,6,7,14,21,28,35,42,49,56,
+57,50,43,36,29,22,15,23,30,37,44,51,58,59,52,45,38,31,39,46,53,60,61,54,47,55,62,63]);g.prototype={parse:function(a){function d(){var d=a[k]<<8|a[k+1];k+=2;return d}function f(){var b=d();b=k+b-2;var c=N(a,b,k);c&&c.f&&((0,_util.warn)("readDataBlock - incorrect length, current marker is: "+c.f),b=c.offset);b=a.subarray(k,b);k+=b.length;return b}function e(a){for(var b=Math.ceil(a.v/8/a.s),c=Math.ceil(a.g/8/a.u),d=0;d<a.b.length;d++){v=a.b[d];var e=Math.ceil(Math.ceil(a.v/8)*v.h/a.s),f=Math.ceil(Math.ceil(a.g/
+8)*v.j/a.u);v.a=new Int16Array(64*c*v.j*(b*v.h+1));v.c=e;v.l=f}a.P=b;a.O=c}var b=(1<arguments.length&&void 0!==arguments[1]?arguments[1]:{}).N,B=void 0===b?null:b,k=0,l=null,r=0;b=[];var n=[],q=[],h=d();if(65496!==h)throw new D("SOI not found");for(h=d();65497!==h;){switch(h){case 65504:case 65505:case 65506:case 65507:case 65508:case 65509:case 65510:case 65511:case 65512:case 65513:case 65514:case 65515:case 65516:case 65517:case 65518:case 65519:case 65534:var c=f();65518===h&&65===c[0]&&100===
+c[1]&&111===c[2]&&98===c[3]&&101===c[4]&&(l={version:c[5]<<8|c[6],Y:c[7]<<8|c[8],Z:c[9]<<8|c[10],W:c[11]});break;case 65499:h=d()+k-2;for(var g;k<h;){var w=a[k++],p=new Uint16Array(64);if(0===w>>4)for(c=0;64>c;c++)g=J[c],p[g]=a[k++];else if(1===w>>4)for(c=0;64>c;c++)g=J[c],p[g]=d();else throw new D("DQT - invalid table spec");b[w&15]=p}break;case 65472:case 65473:case 65474:if(m)throw new D("Only single frame JPEGs supported");d();var m={};m.X=65473===h;m.S=65474===h;m.precision=a[k++];h=d();m.g=
+B||h;m.v=d();m.b=[];m.C={};c=a[k++];for(h=p=w=0;h<c;h++){g=a[k];var t=a[k+1]>>4;var H=a[k+1]&15;w<t&&(w=t);p<H&&(p=H);t=m.b.push({h:t,j:H,T:a[k+2],G:null});m.C[g]=t-1;k+=3}m.s=w;m.u=p;e(m);break;case 65476:g=d();for(h=2;h<g;){w=a[k++];p=new Uint8Array(16);for(c=t=0;16>c;c++,k++)t+=p[c]=a[k];H=new Uint8Array(t);for(c=0;c<t;c++,k++)H[c]=a[k];h+=17+t;(0===w>>4?q:n)[w&15]=W(p,H)}break;case 65501:d();var u=d();break;case 65498:c=1===++r&&!B;d();w=a[k++];g=[];for(h=0;h<w;h++){p=m.C[a[k++]];var v=m.b[p];
+p=a[k++];v.D=q[p>>4];v.o=n[p&15];g.push(v)}h=a[k++];w=a[k++];p=a[k++];try{var z=X(a,k,m,g,u,h,w,p>>4,p&15,c);k+=z}catch(x){if(x instanceof P)return(0,_util.warn)('Attempting to re-parse JPEG image using "scanLines" parameter found in DNL marker (0xFFDC) segment.'),this.parse(a,{N:x.g});throw x;}break;case 65500:k+=4;break;case 65535:255!==a[k]&&k--;break;default:if(255===a[k-3]&&192<=a[k-2]&&254>=a[k-2])k-=3;else if((c=N(a,k-2))&&c.f)(0,_util.warn)("JpegImage.parse - unexpected data, current marker is: "+
+c.f),k=c.offset;else throw new D("unknown marker "+h.toString(16));}h=d()}this.width=m.v;this.height=m.g;this.A=l;this.b=[];for(h=0;h<m.b.length;h++){v=m.b[h];if(u=b[v.T])v.G=u;this.b.push({R:Y(m,v),U:v.h/m.s,V:v.j/m.u,c:v.c,l:v.l})}this.i=this.b.length},L:function(a,d){var f=this.width/a,e=this.height/d,b,g,k=this.b.length,l=a*d*k,r=new Uint8ClampedArray(l),n=new Uint32Array(a);for(g=0;g<k;g++){var q=this.b[g];var h=q.U*f;var c=q.V*e;var C=g;var w=q.R;var p=q.c+1<<3;for(b=0;b<a;b++)q=0|b*h,n[b]=
+(q&4294967288)<<3|q&7;for(h=0;h<d;h++)for(q=0|h*c,q=p*(q&4294967288)|(q&7)<<3,b=0;b<a;b++)r[C]=w[q+n[b]],C+=k}if(e=this.M)for(g=0;g<l;)for(f=q=0;q<k;q++,g++,f+=2)r[g]=(r[g]*e[f]>>8)+e[f+1];return r},w:function(){return this.A?!!this.A.W:3===this.i?0===this.B?!1:!0:1===this.B?!0:!1},I:function(a){for(var d,f,e,b=0,g=a.length;b<g;b+=3)d=a[b],f=a[b+1],e=a[b+2],a[b]=d-179.456+1.402*e,a[b+1]=d+135.459-.344*f-.714*e,a[b+2]=d-226.816+1.772*f;return a},K:function(a){for(var d,f,e,b,g=0,k=0,l=a.length;k<l;k+=
+4)d=a[k],f=a[k+1],e=a[k+2],b=a[k+3],a[g++]=-122.67195406894+f*(-6.60635669420364E-5*f+4.37130475926232E-4*e-5.4080610064599E-5*d+4.8449797120281E-4*b-.154362151871126)+e*(-9.57964378445773E-4*e+8.17076911346625E-4*d-.00477271405408747*b+1.53380253221734)+d*(9.61250184130688E-4*d-.00266257332283933*b+.48357088451265)+b*(-3.36197177618394E-4*b+.484791561490776),a[g++]=107.268039397724+f*(2.19927104525741E-5*f-6.40992018297945E-4*e+6.59397001245577E-4*d+4.26105652938837E-4*b-.176491792462875)+e*(-7.78269941513683E-4*
+e+.00130872261408275*d+7.70482631801132E-4*b-.151051492775562)+d*(.00126935368114843*d-.00265090189010898*b+.25802910206845)+b*(-3.18913117588328E-4*b-.213742400323665),a[g++]=-20.810012546947+f*(-5.70115196973677E-4*f-2.63409051004589E-5*e+.0020741088115012*d-.00288260236853442*b+.814272968359295)+e*(-1.53496057440975E-5*e-1.32689043961446E-4*d+5.60833691242812E-4*b-.195152027534049)+d*(.00174418132927582*d-.00255243321439347*b+.116935020465145)+b*(-3.43531996510555E-4*b+.24165260232407);return a.subarray(0,
+g)},J:function(a){for(var d,f,e,b=0,g=a.length;b<g;b+=4)d=a[b],f=a[b+1],e=a[b+2],a[b]=434.456-d-1.402*e,a[b+1]=119.541-d+.344*f+.714*e,a[b+2]=481.816-d-1.772*f;return a},H:function(a){for(var d,f,e,b,g=0,k=1/255,l=0,r=a.length;l<r;l+=4)d=a[l]*k,f=a[l+1]*k,e=a[l+2]*k,b=a[l+3]*k,a[g++]=255+d*(-4.387332384609988*d+54.48615194189176*f+18.82290502165302*e+212.25662451639585*b-285.2331026137004)+f*(1.7149763477362134*f-5.6096736904047315*e-17.873870861415444*b-5.497006427196366)+e*(-2.5217340131683033*
+e-21.248923337353073*b+17.5119270841813)-b*(21.86122147463605*b+189.48180835922747),a[g++]=255+d*(8.841041422036149*d+60.118027045597366*f+6.871425592049007*e+31.159100130055922*b-79.2970844816548)+f*(-15.310361306967817*f+17.575251261109482*e+131.35250912493976*b-190.9453302588951)+e*(4.444339102852739*e+9.8632861493405*b-24.86741582555878)-b*(20.737325471181034*b+187.80453709719578),a[g++]=255+d*(.8842522430003296*d+8.078677503112928*f+30.89978309703729*e-.23883238689178934*b-14.183576799673286)+
+f*(10.49593273432072*f+63.02378494754052*e+50.606957656360734*b-112.23884253719248)+e*(.03296041114873217*e+115.60384449646641*b-193.58209356861505)-b*(22.33816807309886*b+180.12613974708367);return a.subarray(0,g)},getData:function(a,d,f){if(4<this.i)throw new D("Unsupported color mode");a=this.L(a,d);if(1===this.i&&f){f=a.length;d=new Uint8ClampedArray(3*f);for(var e=0,b=0;b<f;b++){var g=a[b];d[e++]=g;d[e++]=g;d[e++]=g}return d}if(3===this.i&&this.w())return this.I(a);if(4===this.i){if(this.w())return f?
+this.K(a):this.J(a);if(f)return this.H(a)}return a}}; UTIF.JpegDecoder=g})()})();
+
+//UTIF.JpegDecoder = PDFJS.JpegImage;
+
+
+UTIF.encodeImage = function(rgba, w, h, metadata)
+{
+	var idf = { "t256":[w], "t257":[h], "t258":[8,8,8,8], "t259":[1], "t262":[2], "t273":[1000], // strips offset
+				"t277":[4], "t278":[h], /* rows per strip */          "t279":[w*h*4], // strip byte counts
+				"t282":[1], "t283":[1], "t284":[1], "t286":[0], "t287":[0], "t296":[1], "t305": ["Photopea (UTIF.js)"], "t338":[1]
+		};
+	if (metadata) for (var i in metadata) idf[i] = metadata[i];
+	
+	var prfx = new Uint8Array(UTIF.encode([idf]));
+	var img = new Uint8Array(rgba);
+	var data = new Uint8Array(1000+w*h*4);
+	for(var i=0; i<prfx.length; i++) data[i] = prfx[i];
+	for(var i=0; i<img .length; i++) data[1000+i] = img[i];
+	return data.buffer;
+}
+
+UTIF.encode = function(ifds)
+{
+	var data = new Uint8Array(20000), offset = 4, bin = UTIF._binBE;
+	data[0]=77;  data[1]=77;  data[3]=42;
+
+	var ifdo = 8;
+	bin.writeUint(data, offset, ifdo);  offset+=4;
+	for(var i=0; i<ifds.length; i++)
+	{
+		var noffs = UTIF._writeIFD(bin, data, ifdo, ifds[i]);
+		ifdo = noffs[1];
+		if(i<ifds.length-1) bin.writeUint(data, noffs[0], ifdo);
+	}
+	return data.slice(0, ifdo).buffer;
+}
+//UTIF.encode._writeIFD
+
+UTIF.decode = function(buff)
+{
+	UTIF.decode._decodeG3.allow2D = null;
+	var data = new Uint8Array(buff), offset = 0;
+
+	var id = UTIF._binBE.readASCII(data, offset, 2);  offset+=2;
+	var bin = id=="II" ? UTIF._binLE : UTIF._binBE;
+	var num = bin.readUshort(data, offset);  offset+=2;
+
+	var ifdo = bin.readUint(data, offset);  offset+=4;
+	var ifds = [];
+	while(true) {
+		var noff = UTIF._readIFD(bin, data, ifdo, ifds, 0, false);
+		ifdo = bin.readUint(data, noff);
+		if(ifdo==0) break;
+	}
+	return ifds;
+}
+
+UTIF.decodeImage = function(buff, img, ifds)
+{
+	var data = new Uint8Array(buff);
+	var id = UTIF._binBE.readASCII(data, 0, 2);
+
+	if(img["t256"]==null) return;	// No width => probably not an image
+	img.isLE = id=="II";
+	img.width  = img["t256"][0];  //delete img["t256"];
+	img.height = img["t257"][0];  //delete img["t257"];
+
+	var cmpr   = img["t259"] ? img["t259"][0] : 1;  //delete img["t259"];
+	var fo = img["t266"] ? img["t266"][0] : 1;  //delete img["t266"];
+	if(img["t284"] && img["t284"][0]==2) log("PlanarConfiguration 2 should not be used!");
+
+	var bipp;  // bits per pixel
+	if(img["t258"]) bipp = Math.min(32,img["t258"][0])*img["t258"].length;
+	else            bipp = (img["t277"]?img["t277"][0]:1);  
+	// Some .NEF files have t258==14, even though they use 16 bits per pixel
+	if(cmpr==1 && img["t279"]!=null && img["t278"] && img["t262"][0]==32803)  {
+		bipp = Math.round((img["t279"][0]*8)/(img.width*img["t278"][0]));
+	}
+	var bipl = Math.ceil(img.width*bipp/8)*8;
+	var soff = img["t273"];  if(soff==null) soff = img["t324"];
+	var bcnt = img["t279"];  if(cmpr==1 && soff.length==1) bcnt = [img.height*(bipl>>>3)];  if(bcnt==null) bcnt = img["t325"];
+	var bytes = new Uint8Array(img.height*(bipl>>>3)), bilen = 0;
+
+	if(img["t322"]!=null) // tiled
+	{
+		var tw = img["t322"][0], th = img["t323"][0];
+		var tx = Math.floor((img.width  + tw - 1) / tw);
+		var ty = Math.floor((img.height + th - 1) / th);
+		var tbuff = new Uint8Array(Math.ceil(tw*th*bipp/8)|0);
+		for(var y=0; y<ty; y++)
+			for(var x=0; x<tx; x++)
+			{
+				var i = y*tx+x;  for(var j=0; j<tbuff.length; j++) tbuff[j]=0;
+				UTIF.decode._decompress(img,ifds, data, soff[i], bcnt[i], cmpr, tbuff, 0, fo);
+				// Might be required for 7 too. Need to check
+				if (cmpr==6) bytes = tbuff;
+				else UTIF._copyTile(tbuff, Math.ceil(tw*bipp/8)|0, th, bytes, Math.ceil(img.width*bipp/8)|0, img.height, Math.ceil(x*tw*bipp/8)|0, y*th);
+			}
+		bilen = bytes.length*8;
+	}
+	else	// stripped
+	{
+		var rps = img["t278"] ? img["t278"][0] : img.height;   rps = Math.min(rps, img.height);
+		for(var i=0; i<soff.length; i++)
+		{
+			UTIF.decode._decompress(img,ifds, data, soff[i], bcnt[i], cmpr, bytes, Math.ceil(bilen/8)|0, fo);
+			bilen += bipl * rps;
+		}
+		bilen = Math.min(bilen, bytes.length*8);
+	}
+	img.data = new Uint8Array(bytes.buffer, 0, Math.ceil(bilen/8)|0);
+}
+
+UTIF.decode._decompress = function(img,ifds, data, off, len, cmpr, tgt, toff, fo)  // fill order
+{
+	//console.log("compression", cmpr);
+	//var time = Date.now();
+	if(false) {}
+	else if(cmpr==1 || (len==tgt.length && cmpr!=32767)) for(var j=0; j<len; j++) tgt[toff+j] = data[off+j];
+	else if(cmpr==3) UTIF.decode._decodeG3 (data, off, len, tgt, toff, img.width, fo);
+	else if(cmpr==4) UTIF.decode._decodeG4 (data, off, len, tgt, toff, img.width, fo);
+	else if(cmpr==5) UTIF.decode._decodeLZW(data, off, tgt, toff);
+	else if(cmpr==6) UTIF.decode._decodeOldJPEG(img, data, off, len, tgt, toff);
+	else if(cmpr==7) UTIF.decode._decodeNewJPEG(img, data, off, len, tgt, toff);
+	else if(cmpr==8) {  var src = new Uint8Array(data.buffer,off,len);  var bin = pako["inflate"](src);  for(var i=0; i<bin.length; i++) tgt[toff+i]=bin[i];  }
+	else if(cmpr==32767) UTIF.decode._decodeARW(img, data, off, len, tgt, toff);
+	else if(cmpr==32773) UTIF.decode._decodePackBits(data, off, len, tgt, toff);
+	else if(cmpr==32809) UTIF.decode._decodeThunder (data, off, len, tgt, toff);
+	else if(cmpr==34713) //for(var j=0; j<len; j++) tgt[toff+j] = data[off+j];
+		UTIF.decode._decodeNikon   (img,ifds, data, off, len, tgt, toff);
+	else log("Unknown compression", cmpr);
+	
+	//console.log(Date.now()-time);
+	
+	var bps = (img["t258"]?Math.min(32,img["t258"][0]):1);
+	var noc = (img["t277"]?img["t277"][0]:1), bpp=(bps*noc)>>>3, h = (img["t278"] ? img["t278"][0] : img.height), bpl = Math.ceil(bps*noc*img.width/8);
+	
+	// convert to Little Endian  /*
+	if(bps==16 && !img.isLE && img["t33422"]==null)  // not DNG
+		for(var y=0; y<h; y++) {
+			//console.log("fixing endianity");
+			var roff = toff+y*bpl;
+			for(var x=1; x<bpl; x+=2) {  var t=tgt[roff+x];  tgt[roff+x]=tgt[roff+x-1];  tgt[roff+x-1]=t;  }
+		}  //*/
+
+	if(img["t317"] && img["t317"][0]==2)
+	{
+		for(var y=0; y<h; y++)
+		{
+			var ntoff = toff+y*bpl;
+			if(bps==16) for(var j=bpp; j<bpl; j+=2) {
+				var nv = ((tgt[ntoff+j+1]<<8)|tgt[ntoff+j])  +  ((tgt[ntoff+j-bpp+1]<<8)|tgt[ntoff+j-bpp]);
+				tgt[ntoff+j] = nv&255;  tgt[ntoff+j+1] = (nv>>>8)&255;  
+			}
+			else if(noc==3) for(var j=  3; j<bpl; j+=3)
+			{
+				tgt[ntoff+j  ] = (tgt[ntoff+j  ] + tgt[ntoff+j-3])&255;
+				tgt[ntoff+j+1] = (tgt[ntoff+j+1] + tgt[ntoff+j-2])&255;
+				tgt[ntoff+j+2] = (tgt[ntoff+j+2] + tgt[ntoff+j-1])&255;
+			}
+			else for(var j=bpp; j<bpl; j++) tgt[ntoff+j] = (tgt[ntoff+j] + tgt[ntoff+j-bpp])&255;
+		}
+	}
+}
+
+UTIF.decode._ljpeg_diff = function(data, prm, huff) {
+	var getbithuff   = UTIF.decode._getbithuff;
+	var len, diff;
+	len  = getbithuff(data, prm, huff[0], huff);
+	diff = getbithuff(data, prm, len, 0);
+	if ((diff & (1 << (len-1))) == 0)  diff -= (1 << len) - 1;
+	return diff;
+}
+UTIF.decode._decodeARW = function(img, inp, off, src_length, tgt, toff) {
+	var raw_width = img["t256"][0], height=img["t257"][0], tiff_bps=img["t258"][0];
+	var bin=(img.isLE ? UTIF._binLE : UTIF._binBE);
+	//console.log(raw_width, height, tiff_bps, raw_width*height, src_length);
+	var arw2 = (raw_width*height == src_length) || (raw_width*height*1.5 == src_length);
+	//arw2 = true;
+	//console.log("ARW2: ", arw2, raw_width*height, src_length, tgt.length);
+	if(!arw2) {  //"sony_arw_load_raw"; // not arw2
+		height+=8;
+		var prm = [off,0,0,0];
+		var huff = new Uint16Array(32770);
+		var tab = [ 0xf11,0xf10,0xe0f,0xd0e,0xc0d,0xb0c,0xa0b,0x90a,0x809,
+			0x708,0x607,0x506,0x405,0x304,0x303,0x300,0x202,0x201 ];
+		var i, c, n, col, row, sum=0;
+		var ljpeg_diff = UTIF.decode._ljpeg_diff;
+
+		huff[0] = 15;
+		for (n=i=0; i < 18; i++) {
+			var lim = 32768 >>> (tab[i] >>> 8);
+			for(var c=0; c<lim; c++) huff[++n] = tab[i];
+		}
+		for (col = raw_width; col--; )
+			for (row=0; row < height+1; row+=2) {
+				if (row == height) row = 1;
+				sum += ljpeg_diff(inp, prm, huff);
+				if (row < height) {
+					var clr =  (sum)&4095;
+					UTIF.decode._putsF(tgt, (row*raw_width+col)*tiff_bps, clr<<(16-tiff_bps));
+				}
+			}
+		return;
+	}
+	if(raw_width*height*1.5==src_length) {
+		//console.log("weird compression");
+		for(var i=0; i<src_length; i+=3) {  var b0=inp[off+i+0], b1=inp[off+i+1], b2=inp[off+i+2];  
+			tgt[toff+i]=(b1<<4)|(b0>>>4);  tgt[toff+i+1]=(b0<<4)|(b2>>>4);  tgt[toff+i+2]=(b2<<4)|(b1>>>4);  }
+		return;
+	}
+	
+	var pix = new Uint16Array(16);
+	var row, col, val, max, min, imax, imin, sh, bit, i,    dp;
+	
+	var data = new Uint8Array(raw_width+1);
+	for (row=0; row < height; row++) {
+		//fread (data, 1, raw_width, ifp);
+		for(var j=0; j<raw_width; j++) data[j]=inp[off++];
+		for (dp=0, col=0; col < raw_width-30; dp+=16) {
+			max  = 0x7ff & (val = bin.readUint(data,dp));
+			min  = 0x7ff & (val >>> 11);
+			imax = 0x0f & (val >>> 22);
+			imin = 0x0f & (val >>> 26);
+			for (sh=0; sh < 4 && 0x80 << sh <= max-min; sh++);
+			for (bit=30, i=0; i < 16; i++)
+				if      (i == imax) pix[i] = max;
+				else if (i == imin) pix[i] = min;
+				else {
+					pix[i] = ((bin.readUshort(data, dp+(bit >> 3)) >>> (bit & 7) & 0x7f) << sh) + min;
+					if (pix[i] > 0x7ff) pix[i] = 0x7ff;
+					bit += 7;
+				}
+			for (i=0; i < 16; i++, col+=2) {
+				//RAW(row,col) = curve[pix[i] << 1] >> 2;
+				var clr =  pix[i]<<1;   //clr = 0xffff;
+				UTIF.decode._putsF(tgt, (row*raw_width+col)*tiff_bps, clr<<(16-tiff_bps));
+			}
+			col -= col & 1 ? 1:31;
+		}
+	}
+}
+
+UTIF.decode._decodeNikon = function(img,imgs, data, off, src_length, tgt, toff)
+{
+	var nikon_tree = [
+    [ 0, 0,1,5,1,1,1,1,1,1,2,0,0,0,0,0,0,	/* 12-bit lossy */
+      5,4,3,6,2,7,1,0,8,9,11,10,12 ],
+    [ 0, 0,1,5,1,1,1,1,1,1,2,0,0,0,0,0,0,	/* 12-bit lossy after split */
+      0x39,0x5a,0x38,0x27,0x16,5,4,3,2,1,0,11,12,12 ],
+    [ 0, 0,1,4,2,3,1,2,0,0,0,0,0,0,0,0,0,  /* 12-bit lossless */
+      5,4,6,3,7,2,8,1,9,0,10,11,12 ],
+    [ 0, 0,1,4,3,1,1,1,1,1,2,0,0,0,0,0,0,	/* 14-bit lossy */
+      5,6,4,7,8,3,9,2,1,0,10,11,12,13,14 ],
+    [ 0, 0,1,5,1,1,1,1,1,1,1,2,0,0,0,0,0,	/* 14-bit lossy after split */
+      8,0x5c,0x4b,0x3a,0x29,7,6,5,4,3,2,1,0,13,14 ],
+    [ 0, 0,1,4,2,2,3,1,2,0,0,0,0,0,0,0,0,	/* 14-bit lossless */
+      7,6,8,5,9,4,10,3,11,12,2,0,1,13,14 ] ];
+	  
+	var raw_width = img["t256"][0], height=img["t257"][0], tiff_bps=img["t258"][0];
+	
+	var tree = 0, split = 0;
+	var make_decoder = UTIF.decode._make_decoder;
+	var getbithuff   = UTIF.decode._getbithuff;
+	
+	var mn = imgs[0].exifIFD.makerNote, md = mn["t150"]?mn["t150"]:mn["t140"], mdo=0;  //console.log(mn,md);
+	//console.log(md[0].toString(16), md[1].toString(16), tiff_bps);
+	var ver0 = md[mdo++], ver1 = md[mdo++];
+	if (ver0 == 0x49 || ver1 == 0x58)  mdo+=2110;
+	if (ver0 == 0x46) tree = 2;
+	if (tiff_bps == 14) tree += 3;
+	
+	var vpred = [[0,0],[0,0]], bin=(img.isLE ? UTIF._binLE : UTIF._binBE);
+	for(var i=0; i<2; i++) for(var j=0; j<2; j++) {  vpred[i][j] = bin.readShort(md,mdo);  mdo+=2;   }  // not sure here ... [i][j] or [j][i]
+	//console.log(vpred);
+	
+	
+	var max = 1 << tiff_bps & 0x7fff, step=0;
+	var csize = bin.readShort(md,mdo);  mdo+=2;
+	if (csize > 1) step = Math.floor(max / (csize-1));
+	if (ver0 == 0x44 && ver1 == 0x20 && step > 0)  split = bin.readShort(md,562);
+	
+	
+	var i;
+	var row, col;
+	var len, shl, diff;
+	var min_v = 0;
+	var hpred = [0,0];
+	var huff = make_decoder(nikon_tree[tree]);
+	
+	//var g_input_offset=0, bitbuf=0, vbits=0, reset=0;
+	var prm = [off,0,0,0];
+	//console.log(split);  split = 170;
+	
+	for (min_v=row=0; row < height; row++) {
+		if (split && row == split) {
+			//free (huff);
+			huff = make_decoder (nikon_tree[tree+1]);
+			//max_v += (min_v = 16) << 1;
+		}
+		for (col=0; col < raw_width; col++) {
+			i = getbithuff(data,prm,huff[0],huff);
+			len = i  & 15;
+			shl = i >>> 4;
+			diff = (((getbithuff(data,prm,len-shl,0) << 1) + 1) << shl) >>> 1;
+			if ((diff & (1 << (len-1))) == 0)
+				diff -= (1 << len) - (shl==0?1:0);
+			if (col < 2) hpred[col] = vpred[row & 1][col] += diff;
+			else         hpred[col & 1] += diff;
+			
+			var clr = Math.min(Math.max(hpred[col & 1],0),(1<<tiff_bps)-1);
+			var bti = (row*raw_width+col)*tiff_bps;  
+			UTIF.decode._putsF(tgt, bti, clr<<(16-tiff_bps));
+		}
+	}
+}
+// put 16 bits
+UTIF.decode._putsF= function(dt, pos, val) {  val = val<<(8-(pos&7));  var o=(pos>>>3);  dt[o]|=val>>>16;  dt[o+1]|=val>>>8;  dt[o+2]|=val;  }
+
+
+UTIF.decode._getbithuff = function(data,prm,nbits, huff) {
+	var zero_after_ff = 0;
+	var get_byte = UTIF.decode._get_byte;
+	var c;
+  
+	var off=prm[0], bitbuf=prm[1], vbits=prm[2], reset=prm[3];
+
+	//if (nbits > 25) return 0;
+	//if (nbits <  0) return bitbuf = vbits = reset = 0;
+	if (nbits == 0 || vbits < 0) return 0; 
+	while (!reset && vbits < nbits && (c = data[off++]) != -1 &&
+		!(reset = zero_after_ff && c == 0xff && data[off++])) {
+		//console.log("byte read into c");
+		bitbuf = (bitbuf << 8) + c;
+		vbits += 8;
+	} 
+	c = (bitbuf << (32-vbits)) >>> (32-nbits);
+	if (huff) {
+		vbits -= huff[c+1] >>> 8;  //console.log(c, huff[c]>>8);
+		c =  huff[c+1]&255;
+	} else
+		vbits -= nbits;
+	if (vbits < 0) throw "e";
+  
+	prm[0]=off;  prm[1]=bitbuf;  prm[2]=vbits;  prm[3]=reset;
+  
+	return c;
+}
+
+UTIF.decode._make_decoder = function(source) {
+	var max, len, h, i, j;
+	var huff = [];
+
+	for (max=16; max!=0 && !source[max]; max--);
+	var si=17;
+	
+	huff[0] = max;
+	for (h=len=1; len <= max; len++)
+		for (i=0; i < source[len]; i++, ++si)
+			for (j=0; j < 1 << (max-len); j++)
+				if (h <= 1 << max)
+					huff[h++] = (len << 8) | source[si];
+	return huff;
+}
+
+UTIF.decode._decodeNewJPEG = function(img, data, off, len, tgt, toff)
+{
+	var tables = img["t347"], tlen = tables ? tables.length : 0, buff = new Uint8Array(tlen + len);
+	
+	if (tables) {
+		var SOI = 216, EOI = 217, boff = 0;
+		for (var i=0; i<(tlen-1); i++)
+		{
+			// Skip EOI marker from JPEGTables
+			if (tables[i]==255 && tables[i+1]==EOI) break;
+			buff[boff++] = tables[i];
+		}
+
+		// Skip SOI marker from data
+		var byte1 = data[off], byte2 = data[off + 1];
+		if (byte1!=255 || byte2!=SOI)
+		{
+			buff[boff++] = byte1;
+			buff[boff++] = byte2;
+		}
+		for (var i=2; i<len; i++) buff[boff++] = data[off+i];
+	}
+	else for (var i=0; i<len; i++) buff[i] = data[off+i];
+
+	if(img["t262"][0]==32803 || img["t262"][0]==34892) // lossless JPEG and lossy JPEG (used in DNG files)
+	{
+		var bps = img["t258"][0];//, dcdr = new LosslessJpegDecoder();
+		var out = UTIF.LosslessJpegDecode(buff), olen=out.length;  //console.log(olen);
+		
+		if(false) {}
+		else if(bps==16) {
+			if(img.isLE) for(var i=0; i<olen; i++ ) {  tgt[toff+(i<<1)] = (out[i]&255);  tgt[toff+(i<<1)+1] = (out[i]>>>8);  }
+			else         for(var i=0; i<olen; i++ ) {  tgt[toff+(i<<1)] = (out[i]>>>8);  tgt[toff+(i<<1)+1] = (out[i]&255);  }
+		}
+		else if(bps==14 || bps==12) {  // 4 * 14 == 56 == 7 * 8
+			var rst = 16-bps;
+			for(var i=0; i<olen; i++) UTIF.decode._putsF(tgt, i*bps, out[i]<<rst);
+		}
+		else throw new Error("unsupported bit depth "+bps);
+	}
+	else
+	{
+		var parser = new UTIF.JpegDecoder();  parser.parse(buff);
+		var decoded = parser.getData(parser.width, parser.height);
+		for (var i=0; i<decoded.length; i++) tgt[toff + i] = decoded[i];
+	}
+
+	// PhotometricInterpretation is 6 (YCbCr) for JPEG, but after decoding we populate data in
+	// RGB format, so updating the tag value
+	if(img["t262"][0] == 6)  img["t262"][0] = 2;
+}
+
+UTIF.decode._decodeOldJPEGInit = function(img, data, off, len)
+{
+	var SOI = 216, EOI = 217, DQT = 219, DHT = 196, DRI = 221, SOF0 = 192, SOS = 218;
+	var joff = 0, soff = 0, tables, sosMarker, isTiled = false, i, j, k;
+	var jpgIchgFmt    = img["t513"], jifoff = jpgIchgFmt ? jpgIchgFmt[0] : 0;
+	var jpgIchgFmtLen = img["t514"], jiflen = jpgIchgFmtLen ? jpgIchgFmtLen[0] : 0;
+	var soffTag       = img["t324"] || img["t273"] || jpgIchgFmt;
+	var ycbcrss       = img["t530"], ssx = 0, ssy = 0;
+	var spp           = img["t277"]?img["t277"][0]:1;
+	var jpgresint     = img["t515"];
+
+	if(soffTag)
+	{
+		soff = soffTag[0];
+		isTiled = (soffTag.length > 1);
+	}
+
+	if(!isTiled)
+	{
+		if(data[off]==255 && data[off+1]==SOI) return { jpegOffset: off };
+		if(jpgIchgFmt!=null)
+		{
+			if(data[off+jifoff]==255 && data[off+jifoff+1]==SOI) joff = off+jifoff;
+			else log("JPEGInterchangeFormat does not point to SOI");
+
+			if(jpgIchgFmtLen==null) log("JPEGInterchangeFormatLength field is missing");
+			else if(jifoff >= soff || (jifoff+jiflen) <= soff) log("JPEGInterchangeFormatLength field value is invalid");
+
+			if(joff != null) return { jpegOffset: joff };
+		}
+	}
+
+	if(ycbcrss!=null) {  ssx = ycbcrss[0];  ssy = ycbcrss[1];  }
+
+	if(jpgIchgFmt!=null)
+		if(jpgIchgFmtLen!=null)
+			if(jiflen >= 2 && (jifoff+jiflen) <= soff)
+			{
+				if(data[off+jifoff+jiflen-2]==255 && data[off+jifoff+jiflen-1]==SOI) tables = new Uint8Array(jiflen-2);
+				else tables = new Uint8Array(jiflen);
+
+				for(i=0; i<tables.length; i++) tables[i] = data[off+jifoff+i];
+				log("Incorrect JPEG interchange format: using JPEGInterchangeFormat offset to derive tables");
+			}
+			else log("JPEGInterchangeFormat+JPEGInterchangeFormatLength > offset to first strip or tile");
+
+	if(tables == null)
+	{
+		var ooff = 0, out = [];
+		out[ooff++] = 255; out[ooff++] = SOI;
+
+		var qtables = img["t519"];
+		if(qtables==null) throw new Error("JPEGQTables tag is missing");
+		for(i=0; i<qtables.length; i++)
+		{
+			out[ooff++] = 255; out[ooff++] = DQT; out[ooff++] = 0; out[ooff++] = 67; out[ooff++] = i;
+			for(j=0; j<64; j++) out[ooff++] = data[off+qtables[i]+j];
+		}
+
+		for(k=0; k<2; k++)
+		{
+			var htables = img[(k == 0) ? "t520" : "t521"];
+			if(htables==null) throw new Error(((k == 0) ? "JPEGDCTables" : "JPEGACTables") + " tag is missing");
+			for(i=0; i<htables.length; i++)
+			{
+				out[ooff++] = 255; out[ooff++] = DHT;
+				//out[ooff++] = 0; out[ooff++] = 67; out[ooff++] = i;
+				var nc = 19;
+				for(j=0; j<16; j++) nc += data[off+htables[i]+j];
+
+				out[ooff++] = (nc >>> 8); out[ooff++] = nc & 255;
+				out[ooff++] = (i | (k << 4));
+				for(j=0; j<16; j++) out[ooff++] = data[off+htables[i]+j];
+				for(j=0; j<nc; j++) out[ooff++] = data[off+htables[i]+16+j];
+			}
+		}
+
+		out[ooff++] = 255; out[ooff++] = SOF0;
+		out[ooff++] = 0;  out[ooff++] = 8 + 3*spp;  out[ooff++] = 8;
+		out[ooff++] = (img.height >>> 8) & 255;  out[ooff++] = img.height & 255;
+		out[ooff++] = (img.width  >>> 8) & 255;  out[ooff++] = img.width  & 255;
+		out[ooff++] = spp;
+		if(spp==1) {  out[ooff++] = 1;  out[ooff++] = 17;  out[ooff++] = 0;  }
+		else for(i=0; i<3; i++)
+		{
+			out[ooff++] = i + 1;
+			out[ooff++] = (i != 0) ? 17 : (((ssx & 15) << 4) | (ssy & 15));
+			out[ooff++] = i;
+		}
+
+		if(jpgresint!=null && jpgresint[0]!=0)
+		{
+			out[ooff++] = 255;  out[ooff++] = DRI;  out[ooff++] = 0;  out[ooff++] = 4;
+			out[ooff++] = (jpgresint[0] >>> 8) & 255;
+			out[ooff++] = jpgresint[0] & 255;
+		}
+
+		tables = new Uint8Array(out);
+	}
+
+	var sofpos = -1;
+	i = 0;
+	while(i < (tables.length - 1)) {
+		if(tables[i]==255 && tables[i+1]==SOF0) {  sofpos = i; break;  }
+		i++;
+	}
+
+	if(sofpos == -1)
+	{
+		var tmptab = new Uint8Array(tables.length + 10 + 3*spp);
+		tmptab.set(tables);
+		var tmpoff = tables.length;
+		sofpos = tables.length;
+		tables = tmptab;
+
+		tables[tmpoff++] = 255; tables[tmpoff++] = SOF0;
+		tables[tmpoff++] = 0;  tables[tmpoff++] = 8 + 3*spp;  tables[tmpoff++] = 8;
+		tables[tmpoff++] = (img.height >>> 8) & 255;  tables[tmpoff++] = img.height & 255;
+		tables[tmpoff++] = (img.width  >>> 8) & 255;  tables[tmpoff++] = img.width  & 255;
+		tables[tmpoff++] = spp;
+		if(spp==1) {  tables[tmpoff++] = 1;  tables[tmpoff++] = 17;  tables[tmpoff++] = 0;  }
+		else for(i=0; i<3; i++)
+		{
+			tables[tmpoff++] = i + 1;
+			tables[tmpoff++] = (i != 0) ? 17 : (((ssx & 15) << 4) | (ssy & 15));
+			tables[tmpoff++] = i;
+		}
+	}
+
+	if(data[soff]==255 && data[soff+1]==SOS)
+	{
+		var soslen = (data[soff+2]<<8) | data[soff+3];
+		sosMarker = new Uint8Array(soslen+2);
+		sosMarker[0] = data[soff];  sosMarker[1] = data[soff+1]; sosMarker[2] = data[soff+2];  sosMarker[3] = data[soff+3];
+		for(i=0; i<(soslen-2); i++) sosMarker[i+4] = data[soff+i+4];
+	}
+	else
+	{
+		sosMarker = new Uint8Array(2 + 6 + 2*spp);
+		var sosoff = 0;
+		sosMarker[sosoff++] = 255;  sosMarker[sosoff++] = SOS;
+		sosMarker[sosoff++] = 0;  sosMarker[sosoff++] = 6 + 2*spp;  sosMarker[sosoff++] = spp;
+		if(spp==1) {  sosMarker[sosoff++] = 1;  sosMarker[sosoff++] = 0;  }
+		else for(i=0; i<3; i++)
+		{
+			sosMarker[sosoff++] = i+1;  sosMarker[sosoff++] = (i << 4) | i;
+		}
+		sosMarker[sosoff++] = 0;  sosMarker[sosoff++] = 63;  sosMarker[sosoff++] = 0;
+	}
+
+	return { jpegOffset: off, tables: tables, sosMarker: sosMarker, sofPosition: sofpos };
+}
+
+UTIF.decode._decodeOldJPEG = function(img, data, off, len, tgt, toff)
+{
+	var i, dlen, tlen, buff, buffoff;
+	var jpegData = UTIF.decode._decodeOldJPEGInit(img, data, off, len);
+
+	if(jpegData.jpegOffset!=null)
+	{
+		dlen = off+len-jpegData.jpegOffset;
+		buff = new Uint8Array(dlen);
+		for(i=0; i<dlen; i++) buff[i] = data[jpegData.jpegOffset+i];
+	}
+	else
+	{
+		tlen = jpegData.tables.length;
+		buff = new Uint8Array(tlen + jpegData.sosMarker.length + len + 2);
+		buff.set(jpegData.tables);
+		buffoff = tlen;
+
+		buff[jpegData.sofPosition+5] = (img.height >>> 8) & 255;  buff[jpegData.sofPosition+6] = img.height & 255;
+		buff[jpegData.sofPosition+7] = (img.width  >>> 8) & 255;  buff[jpegData.sofPosition+8] = img.width  & 255;
+
+		if(data[off]!=255 || data[off+1]!=SOS)
+		{
+			buff.set(jpegData.sosMarker, buffoff);
+			buffoff += sosMarker.length;
+		}
+		for(i=0; i<len; i++) buff[buffoff++] = data[off+i];
+		buff[buffoff++] = 255;  buff[buffoff++] = EOI;
+	}
+
+	var parser = new UTIF.JpegDecoder();  parser.parse(buff);
+	var decoded = parser.getData(parser.width, parser.height);
+	for (var i=0; i<decoded.length; i++) tgt[toff + i] = decoded[i];
+
+	// PhotometricInterpretation is 6 (YCbCr) for JPEG, but after decoding we populate data in
+	// RGB format, so updating the tag value
+	if(img["t262"] && img["t262"][0] == 6)  img["t262"][0] = 2;
+}
+
+UTIF.decode._decodePackBits = function(data, off, len, tgt, toff)
+{
+	var sa = new Int8Array(data.buffer), ta = new Int8Array(tgt.buffer), lim = off+len;
+	while(off<lim)
+	{
+		var n = sa[off];  off++;
+		if(n>=0  && n<128)    for(var i=0; i< n+1; i++) {  ta[toff]=sa[off];  toff++;  off++;   }
+		if(n>=-127 && n<0) {  for(var i=0; i<-n+1; i++) {  ta[toff]=sa[off];  toff++;           }  off++;  }
+	}
+}
+
+UTIF.decode._decodeThunder = function(data, off, len, tgt, toff)
+{
+	var d2 = [ 0, 1, 0, -1 ],  d3 = [ 0, 1, 2, 3, 0, -3, -2, -1 ];
+	var lim = off+len, qoff = toff*2, px = 0;
+	while(off<lim)
+	{
+		var b = data[off], msk = (b>>>6), n = (b&63);  off++;
+		if(msk==3) { px=(n&15);  tgt[qoff>>>1] |= (px<<(4*(1-qoff&1)));  qoff++;   }
+		if(msk==0) for(var i=0; i<n; i++) {  tgt[qoff>>>1] |= (px<<(4*(1-qoff&1)));  qoff++;   }
+		if(msk==2) for(var i=0; i<2; i++) {  var d=(n>>>(3*(1-i)))&7;  if(d!=4) { px+=d3[d];  tgt[qoff>>>1] |= (px<<(4*(1-qoff&1)));  qoff++; }  }
+		if(msk==1) for(var i=0; i<3; i++) {  var d=(n>>>(2*(2-i)))&3;  if(d!=2) { px+=d2[d];  tgt[qoff>>>1] |= (px<<(4*(1-qoff&1)));  qoff++; }  }
+	}
+}
+
+UTIF.decode._dmap = { "1":0,"011":1,"000011":2,"0000011":3, "010":-1,"000010":-2,"0000010":-3  };
+UTIF.decode._lens = ( function()
+{
+	var addKeys = function(lens, arr, i0, inc) {  for(var i=0; i<arr.length; i++) lens[arr[i]] = i0 + i*inc;  }
+
+	var termW = "00110101,000111,0111,1000,1011,1100,1110,1111,10011,10100,00111,01000,001000,000011,110100,110101," // 15
+	+ "101010,101011,0100111,0001100,0001000,0010111,0000011,0000100,0101000,0101011,0010011,0100100,0011000,00000010,00000011,00011010," // 31
+	+ "00011011,00010010,00010011,00010100,00010101,00010110,00010111,00101000,00101001,00101010,00101011,00101100,00101101,00000100,00000101,00001010," // 47
+	+ "00001011,01010010,01010011,01010100,01010101,00100100,00100101,01011000,01011001,01011010,01011011,01001010,01001011,00110010,00110011,00110100";
+
+	var termB = "0000110111,010,11,10,011,0011,0010,00011,000101,000100,0000100,0000101,0000111,00000100,00000111,000011000," // 15
+	+ "0000010111,0000011000,0000001000,00001100111,00001101000,00001101100,00000110111,00000101000,00000010111,00000011000,000011001010,000011001011,000011001100,000011001101,000001101000,000001101001," // 31
+	+ "000001101010,000001101011,000011010010,000011010011,000011010100,000011010101,000011010110,000011010111,000001101100,000001101101,000011011010,000011011011,000001010100,000001010101,000001010110,000001010111," // 47
+	+ "000001100100,000001100101,000001010010,000001010011,000000100100,000000110111,000000111000,000000100111,000000101000,000001011000,000001011001,000000101011,000000101100,000001011010,000001100110,000001100111";
+
+	var makeW = "11011,10010,010111,0110111,00110110,00110111,01100100,01100101,01101000,01100111,011001100,011001101,011010010,011010011,011010100,011010101,011010110,"
+	+ "011010111,011011000,011011001,011011010,011011011,010011000,010011001,010011010,011000,010011011";
+
+	var makeB = "0000001111,000011001000,000011001001,000001011011,000000110011,000000110100,000000110101,0000001101100,0000001101101,0000001001010,0000001001011,0000001001100,"
+	+ "0000001001101,0000001110010,0000001110011,0000001110100,0000001110101,0000001110110,0000001110111,0000001010010,0000001010011,0000001010100,0000001010101,0000001011010,"
+	+ "0000001011011,0000001100100,0000001100101";
+
+	var makeA = "00000001000,00000001100,00000001101,000000010010,000000010011,000000010100,000000010101,000000010110,000000010111,000000011100,000000011101,000000011110,000000011111";
+
+	termW = termW.split(",");  termB = termB.split(",");  makeW = makeW.split(",");  makeB = makeB.split(",");  makeA = makeA.split(",");
+
+	var lensW = {}, lensB = {};
+	addKeys(lensW, termW, 0, 1);  addKeys(lensW, makeW, 64,64);  addKeys(lensW, makeA, 1792,64);
+	addKeys(lensB, termB, 0, 1);  addKeys(lensB, makeB, 64,64);  addKeys(lensB, makeA, 1792,64);
+	return [lensW, lensB];
+} )();
+
+UTIF.decode._decodeG4 = function(data, off, slen, tgt, toff, w, fo)
+{
+	var U = UTIF.decode, boff=off<<3, len=0, wrd="";	// previous starts with 1
+	var line=[], pline=[];  for(var i=0; i<w; i++) pline.push(0);  pline=U._makeDiff(pline);
+	var a0=0, a1=0, a2=0, b1=0, b2=0, clr=0;
+	var y=0, mode="", toRead=0;
+	var bipl = Math.ceil(w/8)*8;
+
+	while((boff>>>3)<off+slen)
+	{
+		b1 = U._findDiff(pline, a0+(a0==0?0:1), 1-clr), b2 = U._findDiff(pline, b1, clr);	// could be precomputed
+		var bit =0;
+		if(fo==1) bit = (data[boff>>>3]>>>(7-(boff&7)))&1;
+		if(fo==2) bit = (data[boff>>>3]>>>(  (boff&7)))&1;
+		boff++;  wrd+=bit;
+		if(mode=="H")
+		{
+			if(U._lens[clr][wrd]!=null)
+			{
+				var dl=U._lens[clr][wrd];  wrd="";  len+=dl;
+				if(dl<64) {  U._addNtimes(line,len,clr);  a0+=len;  clr=1-clr;  len=0;  toRead--;  if(toRead==0) mode="";  }
+			}
+		}
+		else
+		{
+			if(wrd=="0001")  {  wrd="";  U._addNtimes(line,b2-a0,clr);  a0=b2;   }
+			if(wrd=="001" )  {  wrd="";  mode="H";  toRead=2;  }
+			if(U._dmap[wrd]!=null) {  a1 = b1+U._dmap[wrd];  U._addNtimes(line, a1-a0, clr);  a0=a1;  wrd="";  clr=1-clr;  }
+		}
+		if(line.length==w && mode=="")
+		{
+			U._writeBits(line, tgt, toff*8+y*bipl);
+			clr=0;  y++;  a0=0;
+			pline=U._makeDiff(line);  line=[];
+		}
+		//if(wrd.length>150) {  log(wrd);  break;  throw "e";  }
+	}
+}
+
+UTIF.decode._findDiff = function(line, x, clr) {  for(var i=0; i<line.length; i+=2) if(line[i]>=x && line[i+1]==clr)  return line[i];  }
+
+UTIF.decode._makeDiff = function(line)
+{
+	var out = [];  if(line[0]==1) out.push(0,1);
+	for(var i=1; i<line.length; i++) if(line[i-1]!=line[i]) out.push(i, line[i]);
+	out.push(line.length,0,line.length,1);  return out;
+}
+
+UTIF.decode._decodeG3 = function(data, off, slen, tgt, toff, w, fo)
+{
+	var U = UTIF.decode, boff=off<<3, len=0, wrd="";
+	var line=[], pline=[];  for(var i=0; i<w; i++) line.push(0);
+	var a0=0, a1=0, a2=0, b1=0, b2=0, clr=0;
+	var y=-1, mode="", toRead=0, is1D=false;
+	var bipl = Math.ceil(w/8)*8;
+	while((boff>>>3)<off+slen)
+	{
+		b1 = U._findDiff(pline, a0+(a0==0?0:1), 1-clr), b2 = U._findDiff(pline, b1, clr);	// could be precomputed
+		var bit =0;
+		if(fo==1) bit = (data[boff>>>3]>>>(7-(boff&7)))&1;
+		if(fo==2) bit = (data[boff>>>3]>>>(  (boff&7)))&1;
+		boff++;  wrd+=bit;
+
+		if(is1D)
+		{
+			if(U._lens[clr][wrd]!=null)
+			{
+				var dl=U._lens[clr][wrd];  wrd="";  len+=dl;
+				if(dl<64) {  U._addNtimes(line,len,clr);  clr=1-clr;  len=0;  }
+			}
+		}
+		else
+		{
+			if(mode=="H")
+			{
+				if(U._lens[clr][wrd]!=null)
+				{
+					var dl=U._lens[clr][wrd];  wrd="";  len+=dl;
+					if(dl<64) {  U._addNtimes(line,len,clr);  a0+=len;  clr=1-clr;  len=0;  toRead--;  if(toRead==0) mode="";  }
+				}
+			}
+			else
+			{
+				if(wrd=="0001")  {  wrd="";  U._addNtimes(line,b2-a0,clr);  a0=b2;   }
+				if(wrd=="001" )  {  wrd="";  mode="H";  toRead=2;  }
+				if(U._dmap[wrd]!=null) {  a1 = b1+U._dmap[wrd];  U._addNtimes(line, a1-a0, clr);  a0=a1;  wrd="";  clr=1-clr;  }
+			}
+		}
+		if(wrd.endsWith("000000000001")) // needed for some files
+		{
+			if(y>=0) U._writeBits(line, tgt, toff*8+y*bipl);
+			if(fo==1) is1D = ((data[boff>>>3]>>>(7-(boff&7)))&1)==1;
+			if(fo==2) is1D = ((data[boff>>>3]>>>(  (boff&7)))&1)==1;
+			boff++;
+			if(U._decodeG3.allow2D==null) U._decodeG3.allow2D=is1D;
+			if(!U._decodeG3.allow2D) {  is1D = true;  boff--;  }
+			//log("EOL",y, "next 1D:", is1D);
+			wrd="";  clr=0;  y++;  a0=0;
+			pline=U._makeDiff(line);  line=[];
+		}
+	}
+	if(line.length==w) U._writeBits(line, tgt, toff*8+y*bipl);
+}
+
+UTIF.decode._addNtimes = function(arr, n, val) {  for(var i=0; i<n; i++) arr.push(val);  }
+
+UTIF.decode._writeBits = function(bits, tgt, boff)
+{
+	for(var i=0; i<bits.length; i++) tgt[(boff+i)>>>3] |= (bits[i]<<(7-((boff+i)&7)));
+}
+
+UTIF.decode._decodeLZW = function(data, off, tgt, toff)
+{
+	if(UTIF.decode._lzwTab==null)
+	{
+		var tb=new Uint32Array(0xffff), tn=new Uint16Array(0xffff), chr=new Uint8Array(2e6);
+		for(var i=0; i<256; i++) { chr[i<<2]=i;  tb[i]=i<<2;  tn[i]=1;  }
+		UTIF.decode._lzwTab = [tb,tn,chr];
+	}
+	var copy = UTIF.decode._copyData;
+	var tab = UTIF.decode._lzwTab[0], tln=UTIF.decode._lzwTab[1], chr=UTIF.decode._lzwTab[2], totl = 258, chrl = 258<<2;
+	var bits = 9, boff = off<<3;  // offset in bits
+
+	var ClearCode = 256, EoiCode = 257;
+	var v = 0, Code = 0, OldCode = 0;
+	while(true)
+	{
+		v = (data[boff>>>3]<<16) | (data[(boff+8)>>>3]<<8) | data[(boff+16)>>>3];
+		Code = ( v>>(24-(boff&7)-bits) )    &   ((1<<bits)-1);  boff+=bits;
+
+		if(Code==EoiCode) break;
+		if(Code==ClearCode)
+		{
+			bits=9;  totl = 258;  chrl = 258<<2;
+
+			v = (data[boff>>>3]<<16) | (data[(boff+8)>>>3]<<8) | data[(boff+16)>>>3];
+			Code = ( v>>(24-(boff&7)-bits) )    &   ((1<<bits)-1);  boff+=bits;
+			if(Code==EoiCode) break;
+			tgt[toff]=Code;  toff++;
+		}
+		else if(Code<totl)
+		{
+			var cd = tab[Code], cl = tln[Code];
+			copy(chr,cd,tgt,toff,cl);  toff += cl;
+
+			if(OldCode>=totl) {  tab[totl] = chrl;  chr[tab[totl]] = cd[0];  tln[totl]=1;  chrl=(chrl+1+3)&~0x03;  totl++;  }
+			else
+			{
+				tab[totl] = chrl;
+				var nit = tab[OldCode], nil = tln[OldCode];
+				copy(chr,nit,chr,chrl,nil);
+				chr[chrl+nil]=chr[cd];  nil++;
+				tln[totl]=nil;  totl++;
+
+				chrl=(chrl+nil+3)&~0x03;
+			}
+			if(totl+1==(1<<bits)) bits++;
+		}
+		else
+		{
+			if(OldCode>=totl) {  tab[totl] = chrl;  tln[totl]=0;  totl++;  }
+			else
+			{
+				tab[totl] = chrl;
+				var nit = tab[OldCode], nil = tln[OldCode];
+				copy(chr,nit,chr,chrl,nil);
+				chr[chrl+nil]=chr[chrl];  nil++;
+				tln[totl]=nil;  totl++;
+
+				copy(chr,chrl,tgt,toff,nil);  toff += nil;
+				chrl=(chrl+nil+3)&~0x03;
+			}
+			if(totl+1==(1<<bits)) bits++;
+		}
+		OldCode = Code;
+	}
+}
+
+UTIF.decode._copyData = function(s,so,t,to,l) {  for(var i=0;i<l;i+=4) {  t[to+i]=s[so+i];  t[to+i+1]=s[so+i+1];  t[to+i+2]=s[so+i+2];  t[to+i+3]=s[so+i+3];  }  }
+
+UTIF.tags = {};
+UTIF.ttypes = {  256:3,257:3,258:3,   259:3, 262:3,  273:4,  274:3, 277:3,278:4,279:4, 282:5, 283:5, 284:3, 286:5,287:5, 296:3, 305:2, 306:2, 338:3, 513:4, 514:4, 34665:4  };
+
+UTIF._readIFD = function(bin, data, offset, ifds, depth, debug)
+{
+	var cnt = bin.readUshort(data, offset);  offset+=2;
+	var ifd = {};  ifds.push(ifd);
+
+	if(debug) log("   ".repeat(depth),ifds.length-1,">>>----------------");
+	for(var i=0; i<cnt; i++)
+	{
+		var tag  = bin.readUshort(data, offset);    offset+=2;
+		var type = bin.readUshort(data, offset);    offset+=2;
+		var num  = bin.readUint  (data, offset);    offset+=4;
+		var voff = bin.readUint  (data, offset);    offset+=4;
+		//if(tag==33723) {type=1; num*=4;}//console.log(type,num,voff);//type = 1;  // IPTC/NAA
+
+		var arr = [];
+		//ifd["t"+tag+"-"+UTIF.tags[tag]] = arr;
+		if(type== 1 || type==7) {  arr = new Uint8Array(data.buffer, (num<5 ? offset-4 : voff), num);  }
+		if(type== 2) {  var o0 = (num<5 ? offset-4 : voff), c=data[o0];  
+						if(c<128) arr.push( bin.readASCII(data, o0, num-1) );
+						else      arr = new Uint8Array(data.buffer, o0, num-1);  }
+		if(type== 3) {  for(var j=0; j<num; j++) arr.push(bin.readUshort(data, (num<3 ? offset-4 : voff)+2*j));  }
+		if(type== 4) {  for(var j=0; j<num; j++) arr.push(bin.readUint  (data, (num<2 ? offset-4 : voff)+4*j));  }
+		if(type== 5) {  for(var j=0; j<num; j++) arr.push(bin.readUint  (data, voff+j*8) / bin.readUint(data,voff+j*8+4));  }
+		if(type== 8) {  for(var j=0; j<num; j++) arr.push(bin.readShort (data, (num<3 ? offset-4 : voff)+2*j));  }
+		if(type== 9) {  for(var j=0; j<num; j++) arr.push(bin.readInt   (data, (num<2 ? offset-4 : voff)+4*j));  }
+		if(type==10) {  for(var j=0; j<num; j++) arr.push(bin.readInt   (data, voff+j*8) / bin.readInt (data,voff+j*8+4));  }
+		if(type==11) {  for(var j=0; j<num; j++) arr.push(bin.readFloat (data, voff+j*4));  }
+		if(type==12) {  for(var j=0; j<num; j++) arr.push(bin.readDouble(data, voff+j*8));  }
+		
+		ifd["t"+tag] = arr;
+		
+		if(num!=0 && arr.length==0) {  log("unknown TIFF tag type: ", type, "num:",num);  }
+		if(debug) log("   ".repeat(depth), tag, type, UTIF.tags[tag], arr);
+		
+		if(tag==330 && ifd["t272"] && ifd["t272"][0]=="DSLR-A100") {  } 
+		// ifd["t258"]=[12];  ifd["t259"]=[32767];  ifd["t273"]=[offset+arr[0]];  ifd["t277"]=[1];  ifd["t279"]=[1];  ifd["t33421"]=[2,2];  ifd["t33422"]=[0,1,1,2];
+		else if(tag==330 || tag==34665 || (tag==50740 && bin.readUshort(data,bin.readUint(arr,0))<300  )) {
+			var oarr = tag==50740 ? [bin.readUint(arr,0)] : arr;
+			var subfd = [];
+			for(var j=0; j<oarr.length; j++) UTIF._readIFD(bin, data, oarr[j], subfd, depth+1, debug);
+			if(tag==  330) ifd.subIFD = subfd;
+			if(tag==34665) ifd.exifIFD = subfd[0];
+			if(tag==50740) ifd.dngPrvt = subfd[0];
+		}
+		if(tag==37500) {
+			var mn = arr;
+			//console.log(bin.readASCII(mn,0,mn.length), mn);
+			if(bin.readASCII(mn,0,5)=="Nikon")  ifd.makerNote = UTIF["decode"](mn.slice(10).buffer)[0];
+			else if(bin.readUshort(data,voff)<300){
+				var subsub=[];  UTIF._readIFD(bin, data, voff, subsub, depth+1, debug);
+				ifd.makerNote = subsub[0];
+			}
+		}
+	}
+	if(debug) log("   ".repeat(depth),"<<<---------------");
+	return offset;
+}
+
+UTIF._writeIFD = function(bin, data, offset, ifd)
+{
+	var keys = Object.keys(ifd);
+	bin.writeUshort(data, offset, keys.length);  offset+=2;
+
+	var eoff = offset + keys.length*12 + 4;
+
+	for(var ki=0; ki<keys.length; ki++)
+	{
+		var key = keys[ki];
+		var tag = parseInt(key.slice(1)), type = UTIF.ttypes[tag];  if(type==null) throw new Error("unknown type of tag: "+tag);
+		var val = ifd[key];  if(type==2) val=val[0]+"\u0000";  var num = val.length;
+		bin.writeUshort(data, offset, tag );  offset+=2;
+		bin.writeUshort(data, offset, type);  offset+=2;
+		bin.writeUint  (data, offset, num );  offset+=4;
+
+		var dlen = [-1, 1, 1, 2, 4, 8, 0, 0, 0, 0, 0, 0, 8][type] * num;
+		var toff = offset;
+		if(dlen>4) {  bin.writeUint(data, offset, eoff);  toff=eoff;  }
+
+		if(type==2) {  bin.writeASCII(data, toff, val);   }
+		if(type==3) {  for(var i=0; i<num; i++) bin.writeUshort(data, toff+2*i, val[i]);    }
+		if(type==4) {  for(var i=0; i<num; i++) bin.writeUint  (data, toff+4*i, val[i]);    }
+		if(type==5) {  for(var i=0; i<num; i++) {  bin.writeUint(data, toff+8*i, Math.round(val[i]*10000));  bin.writeUint(data, toff+8*i+4, 10000);  }   }
+		if (type == 12) {  for (var i = 0; i < num; i++) bin.writeDouble(data, toff + 8 * i, val[i]); }
+
+		if(dlen>4) {  dlen += (dlen&1);  eoff += dlen;  }
+		offset += 4;
+	}
+	return [offset, eoff];
+}
+
+UTIF.toRGBA8 = function(out)
+{
+	var w = out.width, h = out.height, area = w*h, qarea = area*4, data = out.data;
+	var img = new Uint8Array(area*4);
+	//console.log(out);
+	// 0: WhiteIsZero, 1: BlackIsZero, 2: RGB, 3: Palette color, 4: Transparency mask, 5: CMYK
+	var intp = (out["t262"] ? out["t262"][0]: 2), bps = (out["t258"]?Math.min(32,out["t258"][0]):1);
+	//log("interpretation: ", intp, "bps", bps, out);
+	if(false) {}
+	else if(intp==0)
+	{
+		var bpl = Math.ceil(bps*w/8);
+		for(var y=0; y<h; y++) {
+			var off = y*bpl, io = y*w;
+			if(bps== 1) for(var i=0; i<w; i++) {  var qi=(io+i)<<2, px=((data[off+(i>>3)])>>(7-  (i&7)))& 1;  img[qi]=img[qi+1]=img[qi+2]=( 1-px)*255;  img[qi+3]=255;    }
+			if(bps== 4) for(var i=0; i<w; i++) {  var qi=(io+i)<<2, px=((data[off+(i>>1)])>>(4-4*(i&1)))&15;  img[qi]=img[qi+1]=img[qi+2]=(15-px)* 17;  img[qi+3]=255;    }
+			if(bps== 8) for(var i=0; i<w; i++) {  var qi=(io+i)<<2, px=data[off+i];  img[qi]=img[qi+1]=img[qi+2]=255-px;  img[qi+3]=255;    }
+		}
+	}
+	else if(intp==1)
+	{
+		var bpl = Math.ceil(bps*w/8);
+		for(var y=0; y<h; y++) {
+			var off = y*bpl, io = y*w;
+			if(bps== 1) for(var i=0; i<w; i++) {  var qi=(io+i)<<2, px=((data[off+(i>>3)])>>(7-  (i&7)))&1;   img[qi]=img[qi+1]=img[qi+2]=(px)*255;  img[qi+3]=255;    }
+			if(bps== 2) for(var i=0; i<w; i++) {  var qi=(io+i)<<2, px=((data[off+(i>>2)])>>(6-2*(i&3)))&3;   img[qi]=img[qi+1]=img[qi+2]=(px)* 85;  img[qi+3]=255;    }
+			if(bps== 8) for(var i=0; i<w; i++) {  var qi=(io+i)<<2, px=data[off+i];  img[qi]=img[qi+1]=img[qi+2]=    px;  img[qi+3]=255;    }
+			if(bps==16) for(var i=0; i<w; i++) {  var qi=(io+i)<<2, px=data[off+(2*i+1)];  img[qi]=img[qi+1]=img[qi+2]= Math.min(255,px);  img[qi+3]=255;    } // ladoga.tif
+		}
+	}
+	else if(intp==2)
+	{
+		var smpls = out["t258"]?out["t258"].length : 3;
+		
+		if(bps== 8) 
+		{
+			if(smpls==4) for(var i=0; i<qarea; i++) img[i] = data[i];
+			if(smpls==3) for(var i=0; i< area; i++) {  var qi=i<<2, ti=i*3;  img[qi]=data[ti];  img[qi+1]=data[ti+1];  img[qi+2]=data[ti+2];  img[qi+3]=255;    }
+		}
+		else{  // 3x 16-bit channel
+			if(smpls==4) for(var i=0; i<area; i++) {  var qi=i<<2, ti=i*8+1;  img[qi]=data[ti];  img[qi+1]=data[ti+2];  img[qi+2]=data[ti+4];  img[qi+3]=data[ti+6];    }
+			if(smpls==3) for(var i=0; i<area; i++) {  var qi=i<<2, ti=i*6+1;  img[qi]=data[ti];  img[qi+1]=data[ti+2];  img[qi+2]=data[ti+4];  img[qi+3]=255;           }
+		}
+	}
+	else if(intp==3)
+	{
+		var map = out["t320"];
+		for(var i=0; i<area; i++) {  var qi=i<<2, mi=data[i];  img[qi]=(map[mi]>>8);  img[qi+1]=(map[256+mi]>>8);  img[qi+2]=(map[512+mi]>>8);  img[qi+3]=255;    }
+	}
+	else if(intp==5) 
+	{
+		var smpls = out["t258"]?out["t258"].length : 4;
+		var gotAlpha = smpls>4 ? 1 : 0;
+		for(var i=0; i<area; i++) {
+			var qi=i<<2, si=i*smpls;  var C=255-data[si], M=255-data[si+1], Y=255-data[si+2], K=(255-data[si+3])*(1/255);
+			img[qi]=~~(C*K+0.5);  img[qi+1]=~~(M*K+0.5);  img[qi+2]=~~(Y*K+0.5);  img[qi+3]=255*(1-gotAlpha)+data[si+4]*gotAlpha;
+		}
+	}
+	else log("Unknown Photometric interpretation: "+intp);
+	return img;
+}
+
+UTIF.replaceIMG = function(imgs)
+{
+	if(imgs==null) imgs = document.getElementsByTagName("img");
+	var sufs = ["tif","tiff","dng","cr2","nef"]
+	for (var i=0; i<imgs.length; i++)
+	{
+		var img=imgs[i], src=img.getAttribute("src");  if(src==null) continue;
+		var suff=src.split(".").pop().toLowerCase();
+		if(sufs.indexOf(suff)==-1) continue;
+		var xhr = new XMLHttpRequest();  UTIF._xhrs.push(xhr);  UTIF._imgs.push(img);
+		xhr.open("GET", src);  xhr.responseType = "arraybuffer";
+		xhr.onload = UTIF._imgLoaded;   xhr.send();
+	}
+}
+
+UTIF._xhrs = [];  UTIF._imgs = [];
+UTIF._imgLoaded = function(e)
+{
+	var buff = e.target.response;
+	var ifds = UTIF.decode(buff);  //console.log(ifds);
+	var vsns = ifds, ma=0, page=vsns[0];  if(ifds[0].subIFD) vsns = vsns.concat(ifds[0].subIFD);
+	for(var i=0; i<vsns.length; i++) {
+		var img = vsns[i];
+		if(img["t258"]==null || img["t258"].length<3) continue;
+		var ar = img["t256"]*img["t257"];
+		if(ar>ma) {  ma=ar;  page=img;  }
+	}
+	UTIF.decodeImage(buff, page, ifds);
+	var rgba = UTIF.toRGBA8(page), w=page.width, h=page.height;
+	var ind = UTIF._xhrs.indexOf(e.target), img = UTIF._imgs[ind];
+	UTIF._xhrs.splice(ind,1);  UTIF._imgs.splice(ind,1);
+	var cnv = document.createElement("canvas");  cnv.width=w;  cnv.height=h;
+	var ctx = cnv.getContext("2d"), imgd = ctx.createImageData(w,h);
+	for(var i=0; i<rgba.length; i++) imgd.data[i]=rgba[i];       ctx.putImageData(imgd,0,0);
+	img.setAttribute("src",cnv.toDataURL());
+}
+
+
+UTIF._binBE =
+{
+	nextZero   : function(data, o) {  while(data[o]!=0) o++;  return o;  },
+	readUshort : function(buff, p) {  return (buff[p]<< 8) |  buff[p+1];  },
+	readShort  : function(buff, p) {  var a=UTIF._binBE.ui8;  a[0]=buff[p+1];  a[1]=buff[p+0];                                    return UTIF._binBE. i16[0];  },
+	readInt    : function(buff, p) {  var a=UTIF._binBE.ui8;  a[0]=buff[p+3];  a[1]=buff[p+2];  a[2]=buff[p+1];  a[3]=buff[p+0];  return UTIF._binBE. i32[0];  },
+	readUint   : function(buff, p) {  var a=UTIF._binBE.ui8;  a[0]=buff[p+3];  a[1]=buff[p+2];  a[2]=buff[p+1];  a[3]=buff[p+0];  return UTIF._binBE.ui32[0];  },
+	readASCII  : function(buff, p, l) {  var s = "";   for(var i=0; i<l; i++) s += String.fromCharCode(buff[p+i]);   return s; },
+	readFloat  : function(buff, p) {  var a=UTIF._binBE.ui8;  for(var i=0;i<4;i++) a[i]=buff[p+3-i];  return UTIF._binBE.fl32[0];  },
+	readDouble : function(buff, p) {  var a=UTIF._binBE.ui8;  for(var i=0;i<8;i++) a[i]=buff[p+7-i];  return UTIF._binBE.fl64[0];  },
+
+	writeUshort: function(buff, p, n) {  buff[p] = (n>> 8)&255;  buff[p+1] =  n&255;  },
+	writeUint  : function(buff, p, n) {  buff[p] = (n>>24)&255;  buff[p+1] = (n>>16)&255;  buff[p+2] = (n>>8)&255;  buff[p+3] = (n>>0)&255;  },
+	writeASCII : function(buff, p, s) {  for(var i = 0; i < s.length; i++)  buff[p+i] = s.charCodeAt(i);  },
+	writeDouble: function(buff, p, n)
+	{
+		UTIF._binBE.fl64[0] = n;
+		for (var i = 0; i < 8; i++) buff[p + i] = UTIF._binBE.ui8[7 - i];
+	}
+}
+UTIF._binBE.ui8  = new Uint8Array  (8);
+UTIF._binBE.i16  = new Int16Array  (UTIF._binBE.ui8.buffer);
+UTIF._binBE.i32  = new Int32Array  (UTIF._binBE.ui8.buffer);
+UTIF._binBE.ui32 = new Uint32Array (UTIF._binBE.ui8.buffer);
+UTIF._binBE.fl32 = new Float32Array(UTIF._binBE.ui8.buffer);
+UTIF._binBE.fl64 = new Float64Array(UTIF._binBE.ui8.buffer);
+
+UTIF._binLE =
+{
+	nextZero   : UTIF._binBE.nextZero,
+	readUshort : function(buff, p) {  return (buff[p+1]<< 8) |  buff[p];  },
+	readShort  : function(buff, p) {  var a=UTIF._binBE.ui8;  a[0]=buff[p+0];  a[1]=buff[p+1];                                    return UTIF._binBE. i16[0];  },
+	readInt    : function(buff, p) {  var a=UTIF._binBE.ui8;  a[0]=buff[p+0];  a[1]=buff[p+1];  a[2]=buff[p+2];  a[3]=buff[p+3];  return UTIF._binBE. i32[0];  },
+	readUint   : function(buff, p) {  var a=UTIF._binBE.ui8;  a[0]=buff[p+0];  a[1]=buff[p+1];  a[2]=buff[p+2];  a[3]=buff[p+3];  return UTIF._binBE.ui32[0];  },
+	readASCII  : UTIF._binBE.readASCII,
+	readFloat  : function(buff, p) {  var a=UTIF._binBE.ui8;  for(var i=0;i<4;i++) a[i]=buff[p+  i];  return UTIF._binBE.fl32[0];  },
+	readDouble : function(buff, p) {  var a=UTIF._binBE.ui8;  for(var i=0;i<8;i++) a[i]=buff[p+  i];  return UTIF._binBE.fl64[0];  }
+}
+UTIF._copyTile = function(tb, tw, th, b, w, h, xoff, yoff)
+{
+	//log("copyTile", tw, th,  w, h, xoff, yoff);
+	var xlim = Math.min(tw, w-xoff);
+	var ylim = Math.min(th, h-yoff);
+	for(var y=0; y<ylim; y++)
+	{
+		var tof = (yoff+y)*w+xoff;
+		var sof = y*tw;
+		for(var x=0; x<xlim; x++) b[tof+x] = tb[sof+x];
+	}
+}
+
+UTIF.LosslessJpegDecode = (function(){function t(Z){this.w=Z;this.N=0;this._=0;this.G=0}t.prototype={t:function(Z){this.N=Math.max(0,Math.min(this.w.length,Z))},i:function(){return this.w[this.N++]},l:function(){var Z=this.N;
+this.N+=2;return this.w[Z]<<8|this.w[Z+1]},J:function(){if(this._==0){this.G=this.w[this.N];this.N+=1+(this.G+1>>>8);
+this._=8}return this.G>>>--this._&1},Z:function(Z){var X=this._,s=this.G,E=Math.min(X,Z);Z-=E;X-=E;var Y=s>>>X&(1<<E)-1;
+while(Z>0){s=this.w[this.N];this.N+=1+(s+1>>>8);E=Math.min(8,Z);Z-=E;X=8-E;Y<<=E;Y|=s>>>X&(1<<E)-1}this._=X;
+this.G=s;return Y}};var i={};i.X=function(){return[0,0,-1]};i.s=function(Z,X,s){Z[i.Y(Z,0,s)+2]=X};i.Y=function(Z,X,s){if(Z[X+2]!=-1)return 0;
+if(s==0)return X;for(var E=0;E<2;E++){if(Z[X+E]==0){Z[X+E]=Z.length;Z.push(0);Z.push(0);Z.push(-1)}var Y=i.Y(Z,Z[X+E],s-1);
+if(Y!=0)return Y}return 0};i.B=function(Z,X){var s=0,E=0,Y=0,B=X._,$=X.G,e=X.N;while(!0){if(B==0){$=X.w[e];
+e+=1+($+1>>>8);B=8}Y=$>>>--B&1;s=Z[s+Y];E=Z[s+2];if(E!=-1){X._=B;X.G=$;X.N=e;return E}}return-1};function l(Z){this.z=new t(Z);
+this.D(this.z)}l.prototype={$:function(Z,X){this.Q=Z.i();this.F=Z.l();this.o=Z.l();var s=this.O=Z.i();
+this.L=[];for(var E=0;E<s;E++){var Y=Z.i(),B=Z.i();Z.i();this.L[Y]=E}Z.t(Z.N+X-(6+s*3))},e:function(){var Z=0,X=this.z.i();
+if(this.H==null)this.H={};var s=this.H[X]=i.X(),E=[];for(var Y=0;Y<16;Y++){E[Y]=this.z.i();Z+=E[Y]}for(var Y=0;
+Y<16;Y++)for(var B=0;B<E[Y];B++)i.s(s,this.z.i(),Y+1);return Z+17},W:function(Z){while(Z>0)Z-=this.e()},p:function(Z,X){var s=Z.i();
+if(!this.U){this.U=[]}for(var E=0;E<s;E++){var Y=Z.i(),B=Z.i();this.U[this.L[Y]]=this.H[B>>>4]}this.g=Z.i();
+Z.t(Z.N+X-(2+s*2))},D:function(Z){var X=!1,s=Z.l();if(s!==l.q)return;do{var s=Z.l(),E=Z.l()-2;switch(s){case l.m:this.$(Z,E);
+break;case l.K:this.W(E);break;case l.V:this.p(Z,E);X=!0;break;default:Z.t(Z.N+E);break}}while(!X)},I:function(Z,X){var s=i.B(X,Z);
+if(s==16)return-32768;var E=Z.Z(s);if((E&1<<s-1)==0)E-=(1<<s)-1;return E},B:function(Z,X){var s=this.z,E=this.O,Y=this.F,B=this.I,$=this.g,e=this.o*E,W=this.U;
+for(var p=0;p<E;p++){Z[p]=B(s,W[p])+(1<<this.Q-1)}for(var D=E;D<e;D+=E){for(var p=0;p<E;p++)Z[D+p]=B(s,W[p])+Z[D+p-E]}var I=X;
+for(var m=1;m<Y;m++){for(var p=0;p<E;p++){Z[I+p]=B(s,W[p])+Z[I+p-X]}for(var D=E;D<e;D+=E){for(var p=0;
+p<E;p++){var K=I+D+p,q=Z[K-E];if($==6)q=Z[K-X]+(q-Z[K-E-X]>>>1);Z[K]=q+B(s,W[p])}}I+=X}}};l.m=65475;
+l.K=65476;l.q=65496;l.V=65498;function J(Z){var X=new l(Z),s=X.Q>8?Uint16Array:Uint8Array,E=new s(X.o*X.F*X.O),Y=X.o*X.O;
+X.B(E,Y);return E}return J}())
+
+
+
+
+})(UTIF, pako);
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+"use strict";
+/* ============================ Ghostmap ============================ */
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+
+/* A pristine copy of this file's markup, taken before anything is touched.
+   The HTML session export re-uses it, so an exported file is a full working
+   copy of Ghostmap rather than a flattened snapshot. Any previously embedded
+   session is stripped so exports never nest. */
+const PRISTINE_HTML = (() => {
+  const c = document.documentElement.cloneNode(true);
+  const old = c.querySelector("#gmSession"); if (old) old.remove();
+  return "<!doctype html>\n" + c.outerHTML;
+})();
+
+const $ = s => document.querySelector(s);
+const cv = $("#cv"), ctx = cv.getContext("2d");
+const stage = $("#stage"), editor = $("#editor");
+
+const page = { w: 792, h: 612, bg: "#ffffff" };
+const view = { scale: 1, ox: 0, oy: 0 };
+let layers = [];              // index 0 = bottom of the stack
+let selIds = [];              // every selected layer; the last one is primary
+let showGhost = true;
+let uid = 1;
+let booting = true;                      /* suppresses autosave while a session loads */
+const CONTENTS_DEFAULT = "#1b3a52";       /* dark baby blue */
+let contentsColor = CONTENTS_DEFAULT;
+let markerScale = 1, calloutScale = 1;   /* global size multipliers, applied to every dot / callout */
+let placeMode = null;                    /* {kind:"marker"|"callout", shape} while waiting for a map click */
+const DEG = Math.PI / 180;
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const nid = () => "L" + (uid++);
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("on"), 2200);
+}
+const sel = () => layers.find(l => l.id === selIds[selIds.length - 1]) || null;
+const selLayers = () => layers.filter(l => selIds.includes(l.id));
+const isSel = id => selIds.includes(id);
+
+/* ---------------------------- geometry ---------------------------- */
+function halfSize(L) {
+  if (L.type === "raster") return { hw: L.w * L.scale / 2, hh: L.h * L.scale / 2 };
+  if (L.type === "callout") return { hw: L.w * calloutScale / 2, hh: L.h * calloutScale / 2 };
+  const r = L.r * markerScale;
+  return { hw: r, hh: r };
+}
+function toLocal(L, p) {
+  const a = -L.rot * DEG, dx = p.x - L.x, dy = p.y - L.y;
+  return { x: dx * Math.cos(a) - dy * Math.sin(a), y: dx * Math.sin(a) + dy * Math.cos(a) };
+}
+function toWorld(L, p) {
+  const a = L.rot * DEG;
+  return { x: L.x + p.x * Math.cos(a) - p.y * Math.sin(a), y: L.y + p.x * Math.sin(a) + p.y * Math.cos(a) };
+}
+const w2s = p => ({ x: p.x * view.scale + view.ox, y: p.y * view.scale + view.oy });
+const s2w = p => ({ x: (p.x - view.ox) / view.scale, y: (p.y - view.oy) / view.scale });
+function evPt(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+/* ---------------------------- drawing ----------------------------- */
+function wrapText(c, text, maxW) {
+  const out = [];
+  for (const para of String(text).split("\n")) {
+    if (!para) { out.push(""); continue; }
+    let line = "";
+    for (const word of para.split(/\s+/)) {
+      const test = line ? line + " " + word : word;
+      if (c.measureText(test).width > maxW && line) { out.push(line); line = word; }
+      else line = test;
+    }
+    out.push(line);
+  }
+  return out;
+}
+function roundRect(c, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y); c.lineTo(x + w - r, y); c.quadraticCurveTo(x + w, y, x + w, y + r);
+  c.lineTo(x + w, y + h - r); c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  c.lineTo(x + r, y + h); c.quadraticCurveTo(x, y + h, x, y + h - r);
+  c.lineTo(x, y + r); c.quadraticCurveTo(x, y, x + r, y); c.closePath();
+}
+/* --------------------------- symbol library ------------------------ */
+/* Each glyph is built inside a circle of radius r centred on the origin.
+   `f` builds a path to be filled, `s` builds one to be stroked in the
+   item's own colour, `d` adds detail strokes in the outline colour. */
+const TAU = Math.PI * 2;
+function polyPath(c, r, n, rot) {
+  c.beginPath();
+  for (let i = 0; i < n; i++) {
+    const a = rot + i * TAU / n, x = Math.cos(a) * r, y = Math.sin(a) * r;
+    if (i) c.lineTo(x, y); else c.moveTo(x, y);
+  }
+  c.closePath();
+}
+function starPath(c, r, n, inner) {
+  c.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / n, rr = i % 2 ? r * inner : r;
+    const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+    if (i) c.lineTo(x, y); else c.moveTo(x, y);
+  }
+  c.closePath();
+}
+function crossPath(c, r, t) {
+  const a = r * t, b = r;
+  c.beginPath();
+  c.moveTo(-a, -b); c.lineTo(a, -b); c.lineTo(a, -a); c.lineTo(b, -a); c.lineTo(b, a);
+  c.lineTo(a, a); c.lineTo(a, b); c.lineTo(-a, b); c.lineTo(-a, a); c.lineTo(-b, a);
+  c.lineTo(-b, -a); c.lineTo(-a, -a); c.closePath();
+}
+function segs(c, list) {
+  c.beginPath();
+  for (const seg of list) for (let i = 0; i < seg.length; i += 2) {
+    if (i) c.lineTo(seg[i], seg[i + 1]); else c.moveTo(seg[i], seg[i + 1]);
+  }
+}
+function arrowPath(c, r, dir) {           /* 0 up, 1 right, 2 down, 3 left */
+  const a = dir * Math.PI / 2;
+  c.save(); c.rotate(a);
+  const w = r * 0.34, hd = r * 0.52;
+  c.beginPath();
+  c.moveTo(0, -r); c.lineTo(hd, -r + hd * 1.25); c.lineTo(w, -r + hd * 1.25);
+  c.lineTo(w, r); c.lineTo(-w, r); c.lineTo(-w, -r + hd * 1.25); c.lineTo(-hd, -r + hd * 1.25);
+  c.closePath(); c.restore();
+}
+const SHAPES = {
+  /* --- basic --- */
+  circle:     { n: "Circle (dot)", g: "Basic", f: (c, r) => { c.beginPath(); c.arc(0, 0, r, 0, TAU); } },
+  square:     { n: "Square", g: "Basic", f: (c, r) => { const a = r * 0.88; c.beginPath(); c.rect(-a, -a, a * 2, a * 2); } },
+  diamond:    { n: "Diamond", g: "Basic", f: (c, r) => polyPath(c, r, 4, -Math.PI / 2) },
+  triangle:   { n: "Triangle", g: "Basic", f: (c, r) => polyPath(c, r, 3, -Math.PI / 2) },
+  triangleDn: { n: "Triangle, down", g: "Basic", f: (c, r) => polyPath(c, r, 3, Math.PI / 2) },
+  pentagon:   { n: "Pentagon", g: "Basic", f: (c, r) => polyPath(c, r, 5, -Math.PI / 2) },
+  hexagon:    { n: "Hexagon", g: "Basic", f: (c, r) => polyPath(c, r, 6, -Math.PI / 2) },
+  octagon:    { n: "Octagon", g: "Basic", f: (c, r) => polyPath(c, r, 8, -Math.PI / 8) },
+  bar:        { n: "Bar", g: "Basic", f: (c, r) => { c.beginPath(); roundRect(c, -r, -r * 0.4, r * 2, r * 0.8, r * 0.18); } },
+  ring:       { n: "Ring", g: "Basic", eo: true, f: (c, r) => { c.beginPath(); c.arc(0, 0, r, 0, TAU); c.moveTo(r * 0.52, 0); c.arc(0, 0, r * 0.52, 0, TAU, true); } },
+  squareOpen: { n: "Square, open", g: "Basic", eo: true, f: (c, r) => { const a = r * 0.88, b = a * 0.56; c.beginPath(); c.rect(-a, -a, a * 2, a * 2); c.rect(-b, -b, b * 2, b * 2); } },
+  target:     { n: "Bullseye", g: "Basic", eo: true, f: (c, r) => { c.beginPath(); c.arc(0, 0, r, 0, TAU); c.moveTo(r * 0.66, 0); c.arc(0, 0, r * 0.66, 0, TAU, true); c.moveTo(r * 0.34, 0); c.arc(0, 0, r * 0.34, 0, TAU); } },
+
+  /* --- stars & marks --- */
+  star5:      { n: "Star, 5 point", g: "Stars & marks", f: (c, r) => starPath(c, r, 5, 0.42) },
+  star6:      { n: "Star, 6 point", g: "Stars & marks", f: (c, r) => starPath(c, r, 6, 0.55) },
+  star4:      { n: "Sparkle, 4 point", g: "Stars & marks", f: (c, r) => starPath(c, r, 4, 0.3) },
+  burst:      { n: "Burst, 8 point", g: "Stars & marks", f: (c, r) => starPath(c, r, 8, 0.52) },
+  plus:       { n: "Plus, solid", g: "Stars & marks", f: (c, r) => crossPath(c, r, 0.34) },
+  xSolid:     { n: "X, solid", g: "Stars & marks", f: (c, r) => { c.save(); c.rotate(Math.PI / 4); crossPath(c, r, 0.34); c.restore(); } },
+  x:          { n: "X", g: "Stars & marks", s: (c, r) => segs(c, [[-r * .78, -r * .78, r * .78, r * .78], [r * .78, -r * .78, -r * .78, r * .78]]) },
+  check:      { n: "Checkmark", g: "Stars & marks", s: (c, r) => segs(c, [[-r * .8, r * .06, -r * .22, r * .62, r * .82, -r * .66]]) },
+  plusThin:   { n: "Plus", g: "Stars & marks", s: (c, r) => segs(c, [[0, -r, 0, r], [-r, 0, r, 0]]) },
+  minus:      { n: "Minus", g: "Stars & marks", s: (c, r) => segs(c, [[-r, 0, r, 0]]) },
+  asterisk:   { n: "Asterisk", g: "Stars & marks", s: (c, r) => segs(c, [[0, -r, 0, r], [-r * .87, -r * .5, r * .87, r * .5], [-r * .87, r * .5, r * .87, -r * .5]]) },
+  crosshair:  { n: "Crosshair", g: "Stars & marks", s: (c, r) => { c.beginPath(); c.arc(0, 0, r * .62, 0, TAU); c.moveTo(0, -r); c.lineTo(0, -r * .3); c.moveTo(0, r * .3); c.lineTo(0, r); c.moveTo(-r, 0); c.lineTo(-r * .3, 0); c.moveTo(r * .3, 0); c.lineTo(r, 0); } },
+  circleOpen: { n: "Circle, open", g: "Stars & marks", s: (c, r) => { c.beginPath(); c.arc(0, 0, r * .8, 0, TAU); } },
+  triOpen:    { n: "Triangle, open", g: "Stars & marks", s: (c, r) => polyPath(c, r * .9, 3, -Math.PI / 2) },
+
+  /* --- arrows --- */
+  arrowUp:    { n: "Arrow, up", g: "Arrows", f: (c, r) => arrowPath(c, r, 0) },
+  arrowRight: { n: "Arrow, right", g: "Arrows", f: (c, r) => arrowPath(c, r, 1) },
+  arrowDown:  { n: "Arrow, down", g: "Arrows", f: (c, r) => arrowPath(c, r, 2) },
+  arrowLeft:  { n: "Arrow, left", g: "Arrows", f: (c, r) => arrowPath(c, r, 3) },
+  chevUp:     { n: "Chevron, up", g: "Arrows", s: (c, r) => segs(c, [[-r * .72, r * .38, 0, -r * .42, r * .72, r * .38]]) },
+  chevDown:   { n: "Chevron, down", g: "Arrows", s: (c, r) => segs(c, [[-r * .72, -r * .42, 0, r * .38, r * .72, -r * .42]]) },
+  chevLeft:   { n: "Chevron, left", g: "Arrows", s: (c, r) => segs(c, [[r * .38, -r * .72, -r * .42, 0, r * .38, r * .72]]) },
+  chevRight:  { n: "Chevron, right", g: "Arrows", s: (c, r) => segs(c, [[-r * .42, -r * .72, r * .38, 0, -r * .42, r * .72]]) },
+  arrowhead:  { n: "Arrowhead", g: "Arrows", f: (c, r) => { c.beginPath(); c.moveTo(0, -r); c.lineTo(r * .8, r * .75); c.lineTo(0, r * .3); c.lineTo(-r * .8, r * .75); c.closePath(); } },
+  north:      { n: "North arrow", g: "Arrows", f: (c, r) => { c.beginPath(); c.moveTo(0, -r); c.lineTo(r * .6, r); c.lineTo(0, r * .42); c.lineTo(-r * .6, r); c.closePath(); } },
+
+  /* --- field symbols --- */
+  well:       { n: "Well, filled", g: "Field symbols", f: (c, r) => { c.beginPath(); c.arc(0, 0, r, 0, TAU); }, d: (c, r) => segs(c, [[0, -r, 0, r], [-r, 0, r, 0]]) },
+  wellOpen:   { n: "Well, open", g: "Field symbols", eo: true, f: (c, r) => { c.beginPath(); c.arc(0, 0, r, 0, TAU); c.moveTo(r * .58, 0); c.arc(0, 0, r * .58, 0, TAU, true); }, d: (c, r) => segs(c, [[0, -r, 0, r], [-r, 0, r, 0]]) },
+  boring:     { n: "Boring", g: "Field symbols", f: (c, r) => { const a = r * .88; c.beginPath(); c.rect(-a, -a, a * 2, a * 2); }, d: (c, r) => { const a = r * .88; return segs(c, [[-a, -a, a, a], [a, -a, -a, a]]); } },
+  piezo:      { n: "Piezometer", g: "Field symbols", f: (c, r) => polyPath(c, r, 3, -Math.PI / 2), d: (c, r) => { c.beginPath(); c.arc(0, r * .12, r * .22, 0, TAU); } },
+  tank:       { n: "Tank", g: "Field symbols", f: (c, r) => { c.beginPath(); roundRect(c, -r, -r * .62, r * 2, r * 1.24, r * .55); } },
+  droplet:    { n: "Droplet", g: "Field symbols", f: (c, r) => { c.beginPath(); c.moveTo(0, -r); c.bezierCurveTo(r * .8, -r * .2, r * .78, r * .5, 0, r); c.bezierCurveTo(-r * .78, r * .5, -r * .8, -r * .2, 0, -r); c.closePath(); } },
+  pin:        { n: "Map pin", g: "Field symbols", eo: true, f: (c, r) => { c.beginPath(); c.moveTo(0, r); c.bezierCurveTo(-r * .95, -r * .15, -r * .8, -r, 0, -r); c.bezierCurveTo(r * .8, -r, r * .95, -r * .15, 0, r); c.closePath(); c.moveTo(r * .3, -r * .45); c.arc(0, -r * .45, r * .3, 0, TAU, true); } },
+  flag:       { n: "Flag", g: "Field symbols", f: (c, r) => { c.beginPath(); c.moveTo(-r * .62, r); c.lineTo(-r * .62, -r); c.lineTo(r * .82, -r * .62); c.lineTo(-r * .3, -r * .24); c.lineTo(-r * .3, r); c.closePath(); } },
+  house:      { n: "Building", g: "Field symbols", f: (c, r) => { c.beginPath(); c.moveTo(0, -r); c.lineTo(r, -r * .1); c.lineTo(r * .68, -r * .1); c.lineTo(r * .68, r); c.lineTo(-r * .68, r); c.lineTo(-r * .68, -r * .1); c.lineTo(-r, -r * .1); c.closePath(); } },
+  bolt:       { n: "Utility", g: "Field symbols", f: (c, r) => { c.beginPath(); c.moveTo(r * .28, -r); c.lineTo(-r * .62, r * .16); c.lineTo(-r * .04, r * .16); c.lineTo(-r * .28, r); c.lineTo(r * .62, -r * .18); c.lineTo(r * .04, -r * .18); c.closePath(); } },
+  warn:       { n: "Warning", g: "Field symbols", f: (c, r) => { c.beginPath(); c.moveTo(0, -r); c.lineTo(r, r * .78); c.lineTo(-r, r * .78); c.closePath(); }, d: (c, r) => segs(c, [[0, -r * .34, 0, r * .28]]) }
+};
+const SHAPE_ORDER = Object.keys(SHAPES);
+
+/* where the segment center->tip leaves the box */
+function boxExit(hw, hh, tx, ty) {
+  if (!tx && !ty) return { x: 0, y: 0 };
+  const t = Math.min(Math.abs(tx) > 1e-6 ? hw / Math.abs(tx) : Infinity,
+                     Math.abs(ty) > 1e-6 ? hh / Math.abs(ty) : Infinity);
+  return { x: tx * t, y: ty * t };
+}
+function drawCallout(c, L) {
+  const S = calloutScale;                     /* the box scales, the arrow tip stays put */
+  const w = L.w * S, hh0 = L.h * S, hw = w / 2, hh = hh0 / 2, fs = L.fontSize * S;
+  if (L.leader) {
+    const a = boxExit(hw, hh, L.tip.x, L.tip.y);
+    c.save();
+    c.strokeStyle = L.border; c.lineWidth = 1.1 * S; c.setLineDash([4.5 * S, 3.5 * S]); c.lineCap = "butt";
+    c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(L.tip.x, L.tip.y); c.stroke();
+    c.setLineDash([]);
+    c.beginPath(); c.arc(L.tip.x, L.tip.y, 2.6 * S, 0, 7); c.fillStyle = L.border; c.fill();
+    c.restore();
+  }
+  roundRect(c, -hw, -hh, w, hh0, 4 * S);
+  c.fillStyle = L.fill; c.fill();
+  if (L.borderW > 0) { c.strokeStyle = L.border; c.lineWidth = L.borderW * S; c.stroke(); }
+  c.save();
+  c.beginPath(); c.rect(-hw, -hh, w, hh0); c.clip();
+  c.font = (L.bold ? "600 " : "") + fs + "px " + L.font;
+  c.fillStyle = L.color; c.textBaseline = "top";
+  const pad = 6 * S, lh = fs * 1.25;
+  const lines = wrapText(c, L.text, w - pad * 2);
+  const total = lines.length * lh;
+  let y = L.valign === "top" ? -hh + pad : -total / 2;
+  c.textAlign = L.align;
+  const tx = L.align === "left" ? -hw + pad : L.align === "right" ? hw - pad : 0;
+  for (const ln of lines) { c.fillText(ln, tx, y); y += lh; }
+  c.restore();
+}
+function drawMarker(c, L) {
+  const r = Math.max(0.5, L.r * markerScale);
+  const sh = SHAPES[L.shape] || SHAPES.circle;
+  c.lineJoin = "round"; c.lineCap = "round";
+  if (sh.s) {                                  /* stroked glyphs: X, check, chevrons */
+    if (L.strokeW > 0) {                       /* halo first so it reads over dark imagery */
+      sh.s(c, r); c.lineWidth = r * 0.34 + L.strokeW * 2; c.strokeStyle = L.stroke; c.stroke();
+    }
+    sh.s(c, r); c.lineWidth = r * 0.34; c.strokeStyle = L.fill; c.stroke();
+  } else {
+    sh.f(c, r);
+    c.fillStyle = L.fill; c.fill(sh.eo ? "evenodd" : "nonzero");
+    if (L.strokeW > 0) { c.lineWidth = L.strokeW; c.strokeStyle = L.stroke; c.stroke(); }
+  }
+  if (sh.d) { sh.d(c, r); c.lineWidth = Math.max(0.6, r * 0.15); c.strokeStyle = L.stroke; c.stroke(); }
+  if (L.label) {
+    const fs = L.fontSize * markerScale;
+    c.font = "600 " + fs + "px " + L.font;
+    c.textBaseline = "middle"; c.textAlign = "left";
+    const x = r + fs * 0.4;
+    c.lineWidth = Math.max(2, fs * 0.25); c.strokeStyle = "rgba(255,255,255,.85)";
+    c.strokeText(L.label, x, 0);
+    c.fillStyle = L.color; c.fillText(L.label, x, 0);
+  }
+}
+function drawLayer(c, L, alphaMul) {
+  c.save();
+  c.globalAlpha = L.opacity * alphaMul;
+  c.translate(L.x, L.y);
+  if (L.rot) c.rotate(L.rot * DEG);
+  if (L.type === "raster") {
+    c.imageSmoothingQuality = "high";
+    const w = L.w * L.scale, h = L.h * L.scale;
+    if (L.src) c.drawImage(L.src, -w / 2, -h / 2, w, h);
+  } else if (L.type === "callout") drawCallout(c, L);
+  else drawMarker(c, L);
+  c.restore();
+}
+function paintScene(c, alphaMul) {
+  for (const L of layers) if (L.visible) drawLayer(c, L, alphaMul);
+}
+
+let dpr = 1;
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  const r = stage.getBoundingClientRect();
+  cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  draw();
+}
+function draw() {
+  const W = cv.width / dpr, H = cv.height / dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.translate(view.ox, view.oy); ctx.scale(view.scale, view.scale);
+
+  /* paper */
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = 22 / view.scale; ctx.shadowOffsetY = 5 / view.scale;
+  ctx.fillStyle = page.bg; ctx.fillRect(0, 0, page.w, page.h);
+  ctx.restore();
+
+  /* ghosted overhang — clipped to OUTSIDE the page so the page itself
+     is drawn exactly once and matches the export pixel for pixel */
+  if (showGhost) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-1e5, -1e5, 2e5, 2e5);
+    ctx.rect(0, 0, page.w, page.h);
+    ctx.clip("evenodd");
+    paintScene(ctx, 0.16);
+    ctx.restore();
+  }
+
+  /* the page itself */
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, page.w, page.h); ctx.clip();
+  paintScene(ctx, 1);
+  ctx.restore();
+
+  ctx.strokeStyle = "rgba(255,255,255,.22)"; ctx.lineWidth = 1 / view.scale;
+  ctx.strokeRect(0, 0, page.w, page.h);
+  ctx.restore();
+
+  drawSelection();
+  $("#zVal").textContent = Math.round(view.scale * 100) + "%";
+  markDirty();
+}
+
+/* ------------------------ selection handles ----------------------- */
+const HANDLE = 5.5;
+function handlePts(L) {
+  const { hw, hh } = halfSize(L);
+  const corners = [{ x: -hw, y: -hh }, { x: hw, y: -hh }, { x: hw, y: hh }, { x: -hw, y: hh }]
+    .map(p => w2s(toWorld(L, p)));
+  const topMid = w2s(toWorld(L, { x: 0, y: -hh }));
+  const out = { corners, topMid };
+  if (L.type === "raster") {                   /* dots and callouts are never rotated */
+    const a = L.rot * DEG;
+    out.rot = { x: topMid.x + Math.sin(a) * 26, y: topMid.y - Math.cos(a) * 26 };
+  }
+  if (L.type === "callout" && L.leader) out.tip = w2s(toWorld(L, L.tip));
+  return out;
+}
+function drawSelection() {
+  const prim = sel();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.save();
+  ctx.strokeStyle = "rgba(94,200,220,.55)"; ctx.lineWidth = 1;
+  for (const S of selLayers()) {              /* every co-selected item gets a light box */
+    if (!S.visible || S === prim) continue;
+    const g = handlePts(S);
+    ctx.beginPath(); ctx.moveTo(g.corners[0].x, g.corners[0].y);
+    for (let i = 1; i < 4; i++) ctx.lineTo(g.corners[i].x, g.corners[i].y);
+    ctx.closePath(); ctx.stroke();
+  }
+  const L = prim;
+  if (!L || !L.visible) { ctx.restore(); return; }
+  const h = handlePts(L);
+  ctx.strokeStyle = "#5ec8dc"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(h.corners[0].x, h.corners[0].y);
+  for (let i = 1; i < 4; i++) ctx.lineTo(h.corners[i].x, h.corners[i].y);
+  ctx.closePath(); ctx.stroke();
+  if (h.rot) { ctx.beginPath(); ctx.moveTo(h.topMid.x, h.topMid.y); ctx.lineTo(h.rot.x, h.rot.y); ctx.stroke(); }
+  ctx.fillStyle = "#0d1015";
+  for (const p of h.corners) { ctx.beginPath(); ctx.rect(p.x - HANDLE, p.y - HANDLE, HANDLE * 2, HANDLE * 2); ctx.fill(); ctx.stroke(); }
+  if (h.rot) { ctx.beginPath(); ctx.arc(h.rot.x, h.rot.y, HANDLE + .5, 0, 7); ctx.fill(); ctx.stroke(); }
+  if (h.tip) {
+    ctx.fillStyle = "#e0a458"; ctx.strokeStyle = "#0d1015";
+    ctx.beginPath();
+    ctx.moveTo(h.tip.x, h.tip.y - 6); ctx.lineTo(h.tip.x + 6, h.tip.y);
+    ctx.lineTo(h.tip.x, h.tip.y + 6); ctx.lineTo(h.tip.x - 6, h.tip.y);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+function hitLayer(pw) {
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const L = layers[i]; if (!L.visible) continue;
+    const p = toLocal(L, pw);
+    if (L.type === "marker") { if (Math.hypot(p.x, p.y) <= L.r * markerScale + 3) return L; continue; }
+    const { hw, hh } = halfSize(L);
+    if (Math.abs(p.x) <= hw && Math.abs(p.y) <= hh) return L;
+  }
+  return null;
+}
+
+/* --------------------------- interaction -------------------------- */
+let drag = null, spaceDown = false;
+cv.addEventListener("pointerdown", e => {
+  cv.setPointerCapture(e.pointerId);
+  const ps = evPt(e), pw = s2w(ps);
+  if (e.button === 1 || spaceDown) { drag = { mode: "pan", ps, ox: view.ox, oy: view.oy }; return; }
+  if (placeMode && e.button === 0) { placeAt(pw); return; }
+  const L = sel();
+  if (L && L.visible) {
+    const h = handlePts(L);
+    const near = (p, r) => p && Math.hypot(ps.x - p.x, ps.y - p.y) <= r;
+    if (near(h.rot, 10)) { drag = { mode: "rot", L, start: Math.atan2(pw.y - L.y, pw.x - L.x) / DEG, rot0: L.rot }; return; }
+    if (near(h.tip, 9)) { drag = { mode: "tip", L }; return; }
+    for (let i = 0; i < 4; i++) if (near(h.corners[i], 9)) {
+      drag = { mode: "size", L, s0: L.scale, w0: L.w, h0: L.h, r0: L.r, l0: toLocal(L, pw) };
+      return;
+    }
+  }
+  const hit = hitLayer(pw);
+  if (hit) {
+    const additive = e.ctrlKey || e.metaKey;
+    if (additive) {                            /* ctrl-click builds a multi-selection */
+      selIds = isSel(hit.id) ? selIds.filter(i => i !== hit.id) : selIds.concat(hit.id);
+      renderLayers(); renderProps(); draw();
+      if (!isSel(hit.id)) return;
+    } else if (!isSel(hit.id)) {
+      selIds = [hit.id]; renderLayers(); renderProps();
+    }
+    drag = { mode: "move", L: hit, ps, group: selLayers().map(l => ({ l: l, x0: l.x, y0: l.y })) };
+    draw(); return;
+  }
+  if (selIds.length) { selIds = []; renderLayers(); renderProps(); }
+  drag = { mode: "pan", ps, ox: view.ox, oy: view.oy };
+  draw();
+});
+/* drop a new dot / symbol / callout where the map was clicked */
+function placeAt(pw) {
+  const m = placeMode;
+  setPlaceMode(null);
+  if (m.kind === "callout") {
+    /* the click is the point of the arrow; the box sits above it */
+    const L = addLayer(newCallout("New callout", pw.x, pw.y - 110));
+    L.tip = { x: 0, y: 110 };
+    draw(); openEditor(L);
+  } else {
+    const L = addLayer(newMarker(pw.x, pw.y));
+    L.shape = m.shape || "circle";
+    L.name = (SHAPES[L.shape] || SHAPES.circle).n;
+    renderLayers(); renderProps(); draw();
+  }
+}
+cv.addEventListener("pointermove", e => {
+  const ps = evPt(e);
+  if (!drag) {
+    const L = sel(); let cur = "default";
+    if (L && L.visible) {
+      const h = handlePts(L);
+      const near = (p, r) => p && Math.hypot(ps.x - p.x, ps.y - p.y) <= r;
+      if (near(h.rot, 10)) cur = "grab";
+      else if (near(h.tip, 9)) cur = "move";
+      else if (h.corners.some(p => near(p, 9))) cur = "nwse-resize";
+    }
+    if (cur === "default" && hitLayer(s2w(ps))) cur = "move";
+    if (spaceDown) cur = "grab";
+    if (placeMode) cur = "crosshair";
+    cv.style.cursor = cur; return;
+  }
+  const pw = s2w(ps);
+  if (drag.mode === "pan") { view.ox = drag.ox + (ps.x - drag.ps.x); view.oy = drag.oy + (ps.y - drag.ps.y); draw(); return; }
+  const L = drag.L;
+  if (drag.mode === "move") {
+    let dx = (ps.x - drag.ps.x) / view.scale, dy = (ps.y - drag.ps.y) / view.scale;
+    if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
+    for (const g of drag.group) { g.l.x = g.x0 + dx; g.l.y = g.y0 + dy; }
+  } else if (drag.mode === "rot") {
+    let a = drag.rot0 + (Math.atan2(pw.y - L.y, pw.x - L.x) / DEG - drag.start);
+    if (e.shiftKey) a = Math.round(a / 15) * 15;
+    L.rot = ((a % 360) + 360) % 360;
+    syncNum("#pRot", L.rot.toFixed(1)); syncNum("#pRotR", L.rot);
+  } else if (drag.mode === "tip") {
+    L.tip = toLocal(L, pw);
+  } else if (drag.mode === "size") {
+    const l = toLocal(L, pw);
+    if (L.type === "raster") {
+      const d0 = Math.hypot(drag.l0.x, drag.l0.y), d1 = Math.hypot(l.x, l.y);
+      if (d0 > 1) L.scale = clamp(drag.s0 * (d1 / d0), 0.01, 60);
+      syncNum("#pScale", (L.scale * 100).toFixed(1));
+    } else if (L.type === "callout") {
+      L.w = clamp(Math.abs(l.x) * 2 / calloutScale, 40, 4000);
+      L.h = clamp(Math.abs(l.y) * 2 / calloutScale, 22, 4000);
+      syncNum("#pW", Math.round(L.w)); syncNum("#pH", Math.round(L.h));
+    } else {
+      L.r = clamp(Math.max(Math.abs(l.x), Math.abs(l.y)) / markerScale, 1.5, 400);
+      syncNum("#pR", L.r.toFixed(1));
+    }
+  }
+  draw();
+});
+function endDrag() { if (drag) { drag = null; renderProps(); } }
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+cv.addEventListener("contextmenu", e => e.preventDefault());
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  const ps = evPt(e), before = s2w(ps);
+  const f = Math.exp(-e.deltaY * 0.0016);
+  view.scale = clamp(view.scale * f, 0.04, 24);
+  const after = s2w(ps);
+  view.ox += (after.x - before.x) * view.scale;
+  view.oy += (after.y - before.y) * view.scale;
+  draw();
+}, { passive: false });
+cv.addEventListener("dblclick", e => {
+  const L = hitLayer(s2w(evPt(e)));
+  if (L && L.type === "callout") { selIds = [L.id]; renderLayers(); renderProps(); openEditor(L); }
+});
+
+/* inline text editor for callouts */
+let editing = null;
+function openEditor(L) {
+  editing = L;
+  const c = w2s({ x: L.x, y: L.y });
+  editor.style.display = "block";
+  editor.style.width = (L.w * view.scale) + "px";
+  editor.style.height = (L.h * view.scale) + "px";
+  editor.style.left = c.x + "px"; editor.style.top = c.y + "px";
+  editor.style.transform = "translate(-50%,-50%) rotate(" + L.rot + "deg)";
+  editor.style.fontSize = (L.fontSize * view.scale) + "px";
+  editor.style.fontFamily = L.font;
+  editor.style.textAlign = L.align;
+  editor.value = L.text;
+  editor.focus(); editor.select();
+}
+function closeEditor() { editing = null; editor.style.display = "none"; }
+editor.addEventListener("input", () => { if (editing) { editing.text = editor.value; draw(); } });
+editor.addEventListener("blur", closeEditor);
+editor.addEventListener("keydown", e => {
+  e.stopPropagation();
+  if (e.key === "Escape") { editor.blur(); }
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) editor.blur();
+});
+
+/* --------------------------- keyboard ----------------------------- */
+addEventListener("keydown", e => {
+  if (e.code === "Space" && !spaceDown && e.target === document.body) { spaceDown = true; cv.style.cursor = "grab"; e.preventDefault(); }
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return;
+  const L = sel(), group = selLayers();
+  if ((e.key === "Delete" || e.key === "Backspace") && group.length) {
+    e.preventDefault(); removeLayers(group.map(l => l.id)); return;
+  }
+  if (e.key === "Escape") {
+    if (placeMode) { setPlaceMode(null); return; }
+    selIds = []; renderLayers(); renderProps(); draw(); return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d" && L) { e.preventDefault(); duplicate(L); return; }
+  if (!L) return;
+  const step = e.shiftKey ? 10 : 1;
+  if (e.key === "ArrowLeft") { for (const g of group) g.x -= step; e.preventDefault(); }
+  else if (e.key === "ArrowRight") { for (const g of group) g.x += step; e.preventDefault(); }
+  else if (e.key === "ArrowUp") { for (const g of group) g.y -= step; e.preventDefault(); }
+  else if (e.key === "ArrowDown") { for (const g of group) g.y += step; e.preventDefault(); }
+  else if (e.key === "[" && L.type === "raster") { L.rot = norm(L.rot - (e.shiftKey ? 15 : 1)); }
+  else if (e.key === "]" && L.type === "raster") { L.rot = norm(L.rot + (e.shiftKey ? 15 : 1)); }
+  else return;
+  draw(); renderProps();
+});
+addEventListener("keyup", e => { if (e.code === "Space") { spaceDown = false; cv.style.cursor = "default"; } });
+const norm = a => ((a % 360) + 360) % 360;
+function syncNum(sel_, v) { const el = $(sel_); if (el && document.activeElement !== el) el.value = v; }
+
+/* ---------------------------- layers ------------------------------ */
+function addLayer(L) {
+  L.id = nid();
+  layers.push(L);
+  selIds = [L.id];
+  renderLayers(); renderProps(); draw();
+  $("#tips").classList.remove("act");
+  $("#tips").style.display = "none";
+  return L;
+}
+function removeLayer(id) { removeLayers([id]); }
+function removeLayers(ids) {
+  layers = layers.filter(l => !ids.includes(l.id));
+  selIds = selIds.filter(i => !ids.includes(i));
+  renderLayers(); renderProps(); draw();
+}
+function duplicate(L) {
+  const c = Object.assign({}, L);
+  if (L.tip) c.tip = { x: L.tip.x, y: L.tip.y };
+  c.x += 16; c.y += 16; c.name = L.name + " copy";
+  addLayer(c);
+}
+function move(id, dir) {
+  const i = layers.findIndex(l => l.id === id); if (i < 0) return;
+  let j = dir === "front" ? layers.length - 1 : dir === "back" ? 0 : i + dir;
+  j = clamp(j, 0, layers.length - 1);
+  const [L] = layers.splice(i, 1); layers.splice(j, 0, L);
+  renderLayers(); draw();
+}
+function newCallout(text, x, y) {
+  return {
+    type: "callout", name: "Callout", visible: true, opacity: 1,
+    x: x, y: y, rot: 0, scale: 1, w: 190, h: 68,
+    text: text || "New callout", fill: "#ffffff", color: "#111111", border: "#c0392b", borderW: 1.5,
+    fontSize: 13, font: "system-ui, sans-serif", align: "center", valign: "middle", bold: false,
+    leader: true, tip: { x: 0, y: 90 }
+  };
+}
+function newMarker(x, y) {
+  return {
+    type: "marker", name: "Marker", visible: true, opacity: 1,
+    x: x, y: y, rot: 0, scale: 1, r: 7, shape: "circle",
+    fill: "#e02b2b", stroke: "#ffffff", strokeW: 1.5,
+    label: "", color: "#111111", fontSize: 12, font: "system-ui, sans-serif"
+  };
+}
+function centerOfView() {
+  const r = stage.getBoundingClientRect();
+  return s2w({ x: r.width / 2, y: r.height / 2 });
+}
+
+/* ---------------------- layer list (contents) --------------------- */
+let dragRow = null;
+function renderLayers() {
+  const box = $("#layers");
+  box.innerHTML = "";
+  if (!layers.length) {
+    box.innerHTML = '<div class="empty">No layers yet. Add a PDF, an image, a callout or a marker &mdash; the newest layer sits on top.</div>';
+    return;
+  }
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const L = layers[i];
+    const el = document.createElement("div");
+    el.className = "lay" + (isSel(L.id) ? " sel" : "");
+    el.draggable = true; el.dataset.id = L.id;
+    const tag = L.type === "raster" ? (L.kind || "img") : L.type === "callout" ? "text" : "dot";
+    el.innerHTML =
+      '<div class="top">' +
+        '<span class="grip">&#8942;&#8942;</span>' +
+        '<span class="lname" title="Rename"><span class="tag">' + tag + '</span>' + esc(L.name) + '</span>' +
+        '<button class="eye' + (L.visible ? '' : ' off') + '" title="Show or hide">' + (L.visible ? "&#9673;" : "&#9671;") + '</button>' +
+      '</div>' +
+      '<div class="bot"><input type="range" min="0" max="100" value="' + Math.round(L.opacity * 100) + '">' +
+      '<span class="opv">' + Math.round(L.opacity * 100) + '%</span></div>';
+    el.addEventListener("mousedown", ev => {
+      if (ev.ctrlKey || ev.metaKey) {
+        selIds = isSel(L.id) ? selIds.filter(i => i !== L.id) : selIds.concat(L.id);
+      } else if (!isSel(L.id) || selIds.length > 1) selIds = [L.id];
+      else return;
+      renderLayers(); renderProps(); draw();
+    });
+    el.querySelector(".lname").addEventListener("dblclick", ev => { ev.stopPropagation(); rename(L); });
+    el.querySelector(".eye").addEventListener("click", ev => {
+      ev.stopPropagation(); L.visible = !L.visible; renderLayers(); draw();
+    });
+    const rng = el.querySelector("input[type=range]");
+    rng.addEventListener("input", ev => {
+      ev.stopPropagation();
+      L.opacity = (+rng.value) / 100;
+      el.querySelector(".opv").textContent = rng.value + "%";
+      syncNum("#pOpacity", rng.value); draw();
+    });
+    rng.addEventListener("mousedown", ev => ev.stopPropagation());
+    el.addEventListener("dragstart", ev => { dragRow = L.id; el.classList.add("drag"); ev.dataTransfer.effectAllowed = "move"; });
+    el.addEventListener("dragend", () => { dragRow = null; renderLayers(); });
+    el.addEventListener("dragover", ev => { ev.preventDefault(); el.classList.add("over"); });
+    el.addEventListener("dragleave", () => el.classList.remove("over"));
+    el.addEventListener("drop", ev => {
+      ev.preventDefault(); el.classList.remove("over");
+      if (!dragRow || dragRow === L.id) return;
+      const from = layers.findIndex(x => x.id === dragRow);
+      const [m] = layers.splice(from, 1);
+      const to = layers.findIndex(x => x.id === L.id);
+      layers.splice(to + 1, 0, m);
+      renderLayers(); draw();
+    });
+    box.appendChild(el);
+  }
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function rename(L) {
+  modal("Rename layer", "", '<input type="text" id="mName" value="' + esc(L.name) + '">', () => {
+    const v = $("#mName").value.trim(); if (v) L.name = v; renderLayers(); renderProps();
+  });
+  setTimeout(() => { $("#mName").focus(); $("#mName").select(); }, 30);
+}
+
+/* --------------------------- properties --------------------------- */
+function renderProps() {
+  const box = $("#props"), L = sel();
+  if (!L) { box.innerHTML = '<div class="empty">Nothing selected. Click a layer on the map or in Contents. Hold Ctrl to select several.</div>'; return; }
+  if (selIds.length > 1) { renderMultiProps(box); return; }
+  const common =
+    '<div class="row"><label class="f">Name</label><input type="text" id="pName" value="' + esc(L.name) + '"></div>' +
+    '<div class="row"><label class="f">Position</label>' +
+      '<input type="number" id="pX" step="1" value="' + Math.round(L.x) + '">' +
+      '<input type="number" id="pY" step="1" value="' + Math.round(L.y) + '"></div>' +
+    (L.type === "raster" ?
+      '<div class="row"><label class="f">Rotation</label>' +
+        '<button class="btn icon" id="rM90" title="-90&deg;">&#8630;</button>' +
+        '<button class="btn icon" id="rM1">&minus;</button>' +
+        '<input type="number" id="pRot" step="0.5" value="' + (+L.rot.toFixed(1)) + '">' +
+        '<button class="btn icon" id="rP1">+</button>' +
+        '<button class="btn icon" id="rP90" title="+90&deg;">&#8631;</button></div>' +
+      '<div class="row"><label class="f"></label><input type="range" id="pRotR" min="0" max="360" step="0.5" value="' + L.rot + '"></div>'
+      : "") +
+    '<div class="row"><label class="f">Opacity</label><input type="range" id="pOpacity" min="0" max="100" value="' + Math.round(L.opacity * 100) + '">' +
+      '<span class="opv" id="pOpV">' + Math.round(L.opacity * 100) + '%</span></div>';
+
+  let extra = "";
+  if (L.type === "raster") {
+    extra =
+      '<div class="row"><label class="f">Scale</label>' +
+        '<button class="btn icon" id="sM">&minus;</button>' +
+        '<input type="number" id="pScale" step="1" value="' + (+(L.scale * 100).toFixed(1)) + '">' +
+        '<button class="btn icon" id="sP">+</button><span class="hint">%</span></div>' +
+      '<div class="row"><button class="btn sm grow" id="bFitPage">Fit to page</button>' +
+        '<button class="btn sm grow" id="bCenter">Center</button></div>' +
+      '<div class="hint">Source ' + L.w + " &times; " + L.h + ' px</div>';
+  } else if (L.type === "callout") {
+    extra =
+      '<div class="row"><label class="f">Text</label></div>' +
+      '<div class="row"><textarea id="pText" rows="3">' + esc(L.text) + '</textarea></div>' +
+      '<div class="row"><label class="f">Box</label>' +
+        '<input type="number" id="pW" step="1" value="' + Math.round(L.w) + '">' +
+        '<input type="number" id="pH" step="1" value="' + Math.round(L.h) + '">' +
+        '<button class="btn sm" id="bAuto" title="Shrink the box to fit its text">Auto</button></div>' +
+      '<div class="row"><label class="f">Box fill</label><input type="color" id="pFill" value="' + L.fill + '">' +
+        '<span class="hint" style="flex:1 1 auto">Background of the callout</span></div>' +
+      '<div class="row"><label class="f">Lines</label><input type="color" id="pBorder" value="' + L.border + '">' +
+        '<span class="hint" style="flex:1 1 auto">Border, leader and arrow point</span></div>' +
+      '<div class="row"><label class="f">Text</label><input type="color" id="pColor" value="' + L.color + '"></div>' +
+      '<div class="row"><label class="f">Type size</label>' +
+        '<button class="btn icon" id="fM">&minus;</button>' +
+        '<input type="number" id="pFont" step="1" min="4" value="' + L.fontSize + '">' +
+        '<button class="btn icon" id="fP">+</button>' +
+        '<select id="pAlign" style="width:80px"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></div>' +
+      '<div class="row"><label class="f">Border</label><input type="number" id="pBw" step="0.25" min="0" value="' + L.borderW + '">' +
+        '<label class="hint" style="flex:1 1 auto;display:flex;gap:6px;align-items:center">' +
+        '<input type="checkbox" id="pLeader" ' + (L.leader ? "checked" : "") + ' style="width:auto">Leader line</label></div>' +
+      '<div class="hint">Double-click the box on the map to edit text there. Drag the amber diamond to aim the leader.</div>';
+  } else {
+    extra =
+      '<div class="row"><label class="f">Symbol</label>' + shapeOptions("pShape", L.shape) + '</div>' +
+      '<div class="row"><label class="f">Fill</label><input type="color" id="pFill" value="' + L.fill + '">' +
+        '<label class="f" style="flex:0 0 auto">Outline</label><input type="color" id="pStroke" value="' + L.stroke + '">' +
+        '<input type="number" id="pSw" step="0.25" min="0" value="' + L.strokeW + '"><span class="hint">pt</span></div>' +
+      '<div class="row"><label class="f">This dot</label>' +
+        '<button class="btn icon" id="rMi">&minus;</button>' +
+        '<input type="number" id="pR" step="0.5" min="1" value="' + L.r + '">' +
+        '<button class="btn icon" id="rPl">+</button><span class="hint">base size</span></div>' +
+      '<div class="row"><label class="f">Label</label><input type="text" id="pLabel" value="' + esc(L.label) + '"></div>' +
+      '<div class="row"><label class="f">Label type</label><input type="number" id="pFont" step="1" min="4" value="' + L.fontSize + '">' +
+        '<input type="color" id="pColor" value="' + L.color + '"></div>';
+  }
+
+  box.innerHTML = common + extra +
+    '<div class="row" style="margin-top:10px"><button class="btn sm grow" id="bUp">Forward</button>' +
+      '<button class="btn sm grow" id="bDown">Back</button>' +
+      '<button class="btn sm" id="bTop" title="Bring to front">&#9650;</button>' +
+      '<button class="btn sm" id="bBot" title="Send to back">&#9660;</button></div>' +
+    '<div class="row"><button class="btn sm grow" id="bDup">Duplicate</button>' +
+      '<button class="btn sm grow" id="bDel" style="color:var(--danger)">Delete layer</button></div>';
+
+  const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+  const upd = () => { draw(); renderLayers(); };
+  on("#pName", "input", e => { L.name = e.target.value; renderLayers(); });
+  on("#pX", "input", e => { L.x = +e.target.value || 0; draw(); });
+  on("#pY", "input", e => { L.y = +e.target.value || 0; draw(); });
+  const setRot = v => { L.rot = norm(v); syncNum("#pRot", +L.rot.toFixed(1)); syncNum("#pRotR", L.rot); draw(); };
+  on("#pRot", "input", e => { L.rot = norm(+e.target.value || 0); syncNum("#pRotR", L.rot); draw(); });
+  on("#pRotR", "input", e => { L.rot = +e.target.value; syncNum("#pRot", +L.rot.toFixed(1)); draw(); });
+  on("#rM1", "click", () => setRot(L.rot - 1)); on("#rP1", "click", () => setRot(L.rot + 1));
+  on("#rM90", "click", () => setRot(L.rot - 90)); on("#rP90", "click", () => setRot(L.rot + 90));
+  on("#pOpacity", "input", e => { L.opacity = (+e.target.value) / 100; $("#pOpV").textContent = e.target.value + "%"; upd(); });
+
+  if (L.type === "raster") {
+    const setS = v => { L.scale = clamp(v, 0.01, 60); syncNum("#pScale", +(L.scale * 100).toFixed(1)); draw(); };
+    on("#pScale", "input", e => { L.scale = clamp((+e.target.value || 100) / 100, 0.01, 60); draw(); });
+    on("#sM", "click", () => setS(L.scale / 1.05)); on("#sP", "click", () => setS(L.scale * 1.05));
+    on("#bFitPage", "click", () => {
+      L.scale = Math.min(page.w / L.w, page.h / L.h); L.rot = 0;
+      L.x = page.w / 2; L.y = page.h / 2; renderProps(); draw();
+    });
+    on("#bCenter", "click", () => { L.x = page.w / 2; L.y = page.h / 2; renderProps(); draw(); });
+  } else if (L.type === "callout") {
+    on("#pText", "input", e => { L.text = e.target.value; draw(); });
+    on("#pW", "input", e => { L.w = clamp(+e.target.value || 40, 20, 4000); draw(); });
+    on("#pH", "input", e => { L.h = clamp(+e.target.value || 22, 14, 4000); draw(); });
+    on("#bAuto", "click", () => { autoSize(L); renderProps(); draw(); });
+    on("#pFill", "input", e => { L.fill = e.target.value; draw(); });
+    on("#pColor", "input", e => { L.color = e.target.value; draw(); });
+    on("#pBorder", "input", e => { L.border = e.target.value; draw(); });
+    on("#pBw", "input", e => { L.borderW = Math.max(0, +e.target.value || 0); draw(); });
+    const setF = v => { L.fontSize = clamp(v, 4, 400); syncNum("#pFont", L.fontSize); draw(); };
+    on("#pFont", "input", e => { L.fontSize = clamp(+e.target.value || 12, 4, 400); draw(); });
+    on("#fM", "click", () => setF(L.fontSize - 1)); on("#fP", "click", () => setF(L.fontSize + 1));
+    const al = $("#pAlign"); if (al) { al.value = L.align; al.addEventListener("change", () => { L.align = al.value; draw(); }); }
+    on("#pLeader", "change", e => { L.leader = e.target.checked; draw(); });
+  } else {
+    const setR = v => { L.r = clamp(v, 1, 400); syncNum("#pR", +L.r.toFixed(1)); draw(); };
+    on("#pR", "input", e => { L.r = clamp(+e.target.value || 6, 1, 400); draw(); });
+    on("#rMi", "click", () => setR(L.r - 1)); on("#rPl", "click", () => setR(L.r + 1));
+    on("#pFill", "input", e => { L.fill = e.target.value; draw(); });
+    on("#pStroke", "input", e => { L.stroke = e.target.value; draw(); });
+    on("#pSw", "input", e => { L.strokeW = Math.max(0, +e.target.value || 0); draw(); });
+    on("#pShape", "change", e => { L.shape = e.target.value; renderLayers(); draw(); });
+    on("#pLabel", "input", e => { L.label = e.target.value; draw(); });
+    on("#pColor", "input", e => { L.color = e.target.value; draw(); });
+    on("#pFont", "input", e => { L.fontSize = clamp(+e.target.value || 12, 4, 400); draw(); });
+  }
+  on("#bUp", "click", () => move(L.id, 1)); on("#bDown", "click", () => move(L.id, -1));
+  on("#bTop", "click", () => move(L.id, "front")); on("#bBot", "click", () => move(L.id, "back"));
+  on("#bDup", "click", () => duplicate(L));
+  on("#bDel", "click", () => removeLayer(L.id));
+}
+/* shape <select> markup, grouped, reused by the toolbar and the panel */
+function shapeOptions(id, current, placeholder) {
+  return '<select id="' + id + '">' + shapeOptionsInner(current, placeholder) + "</select>";
+}
+function shapeOptionsInner(current, placeholder) {
+  const groups = {};
+  for (const k of SHAPE_ORDER) (groups[SHAPES[k].g] = groups[SHAPES[k].g] || []).push(k);
+  let s = "";
+  if (placeholder) s += '<option value="">' + placeholder + "</option>";
+  for (const g in groups) {
+    s += '<optgroup label="' + g + '">';
+    for (const k of groups[g]) s += '<option value="' + k + '"' + (k === current ? " selected" : "") + ">" + SHAPES[k].n + "</option>";
+    s += "</optgroup>";
+  }
+  return s;
+}
+/* panel shown when several items are selected: colours apply to all of them */
+function renderMultiProps(box) {
+  const g = selLayers();
+  const marks = g.filter(l => l.type === "marker"), calls = g.filter(l => l.type === "callout");
+  const first = marks[0] || calls[0] || g[0];
+  let html = '<div class="multi">' + g.length + " items selected" +
+    (marks.length ? " &middot; " + marks.length + " dot" + (marks.length > 1 ? "s" : "") : "") +
+    (calls.length ? " &middot; " + calls.length + " callout" + (calls.length > 1 ? "s" : "") : "") +
+    "</div>";
+  if (marks.length) {
+    html += '<div class="row"><label class="f">Dot fill</label><input type="color" id="mFill" value="' + marks[0].fill + '">' +
+      '<label class="f" style="flex:0 0 auto">Outline</label><input type="color" id="mStroke" value="' + marks[0].stroke + '"></div>' +
+      '<div class="row"><label class="f">Symbol</label>' + shapeOptions("mShape", null, "Leave unchanged") + "</div>";
+  }
+  if (calls.length) {
+    html += '<div class="row"><label class="f">Box fill</label><input type="color" id="kFill" value="' + calls[0].fill + '"></div>' +
+      '<div class="row"><label class="f">Lines</label><input type="color" id="kBorder" value="' + calls[0].border + '"></div>' +
+      '<div class="row"><label class="f">Text</label><input type="color" id="kColor" value="' + calls[0].color + '"></div>';
+  }
+  html += '<div class="row"><label class="f">Opacity</label><input type="range" id="mOpacity" min="0" max="100" value="' +
+    Math.round((first ? first.opacity : 1) * 100) + '"><span class="opv" id="mOpV"></span></div>' +
+    '<div class="row" style="margin-top:9px"><button class="btn sm grow" id="mDel" style="color:var(--danger)">Delete selected</button></div>' +
+    '<div class="hint">Ctrl-click on the map or in Contents to add or drop items. Dragging moves them together.</div>';
+  box.innerHTML = html;
+  const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+  const set = (list, key, v) => { for (const l of list) l[key] = v; draw(); };
+  on("#mFill", "input", e => set(marks, "fill", e.target.value));
+  on("#mStroke", "input", e => set(marks, "stroke", e.target.value));
+  on("#mShape", "change", e => { if (e.target.value) { set(marks, "shape", e.target.value); renderLayers(); } });
+  on("#kFill", "input", e => set(calls, "fill", e.target.value));
+  on("#kBorder", "input", e => set(calls, "border", e.target.value));
+  on("#kColor", "input", e => set(calls, "color", e.target.value));
+  on("#mOpacity", "input", e => {
+    set(g, "opacity", (+e.target.value) / 100);
+    $("#mOpV").textContent = e.target.value + "%"; renderLayers();
+  });
+  on("#mDel", "click", () => removeLayers(g.map(l => l.id)));
+  const ov = $("#mOpV"); if (ov) ov.textContent = Math.round((first ? first.opacity : 1) * 100) + "%";
+}
+
+/* ------------------- click-to-place & global sizes ----------------- */
+const TIP_IDLE = "Drop a PDF, TIFF or image to begin";
+function setPlaceMode(m) {
+  placeMode = m;
+  const tips = $("#tips");
+  $("#bMarker").classList.toggle("on", !!m && m.kind === "marker" && !m.shape);
+  $("#bCallout").classList.toggle("on", !!m && m.kind === "callout");
+  if (!m) {
+    $("#symSel").value = "";
+    tips.classList.remove("act");
+    tips.textContent = TIP_IDLE;
+    tips.style.display = layers.length ? "none" : "block";
+    cv.style.cursor = "default";
+    return;
+  }
+  tips.textContent = m.kind === "callout"
+    ? "Click the map where the callout arrow should point \u2014 Esc to cancel"
+    : "Click the map to drop the " + (m.shape ? SHAPES[m.shape].n.toLowerCase() : "dot") + " \u2014 Esc to cancel";
+  tips.classList.add("act");
+  tips.style.display = "block";
+  cv.style.cursor = "crosshair";
+}
+function setMarkerScale(v) {
+  markerScale = clamp(v, 0.05, 200);
+  syncNum("#mSize", +markerScale.toFixed(2)); draw(); renderProps();
+}
+function setCalloutScale(v) {
+  calloutScale = clamp(v, 0.05, 200);
+  syncNum("#cSize", +calloutScale.toFixed(2)); draw(); renderProps();
+}
+const sizeStep = (v, dir) => Math.max(0.05, +(v + dir * (v >= 2 ? 0.25 : 0.1)).toFixed(2));
+
+function autoSize(L) {
+  const c = document.createElement("canvas").getContext("2d");
+  c.font = (L.bold ? "600 " : "") + L.fontSize + "px " + L.font;
+  const lines = wrapText(c, L.text, L.w - 12);
+  let mx = 0; for (const ln of lines) mx = Math.max(mx, c.measureText(ln).width);
+  L.w = clamp(Math.ceil(mx) + 16, 40, 4000);
+  L.h = clamp(Math.ceil(lines.length * L.fontSize * 1.25) + 12, 22, 4000);
+}
+
+/* ------------------------- adding content ------------------------- */
+function placeRaster(src, w, h, name, kind) {
+  const fit = Math.min(page.w / w, page.h / h, 1);
+  return addLayer({
+    type: "raster", kind: kind || "img", name: name, visible: true, opacity: 1,
+    x: page.w / 2, y: page.h / 2, rot: 0, scale: fit, w: w, h: h, src: src
+  });
+}
+function imgFromDataURL(url) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im); im.onerror = rej; im.src = url;
+  });
+}
+async function addImageFile(file) {
+  const url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); });
+  const im = await imgFromDataURL(url);
+  const L = placeRaster(im, im.naturalWidth, im.naturalHeight, file.name || "Pasted image", "img");
+  L.dataURL = url;
+  draw();
+}
+async function addPDFFile(file) {
+  if (!window.pdfjsLib) { toast("PDF engine did not load — check the connection, then reload."); return; }
+  const buf = await file.arrayBuffer();
+  const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+  let pages = [1];
+  if (doc.numPages > 1) {
+    const ans = await askPages(file.name, doc.numPages);
+    if (ans === null) return;
+    pages = ans;
+  }
+  let added = 0;
+  for (const n of pages) {
+    try {
+      const pg = await doc.getPage(n);
+      const base = pg.getViewport({ scale: 1 });
+      const s = Math.min(2400 / Math.max(base.width, base.height), 4);
+      const vp = pg.getViewport({ scale: s });
+      const c = document.createElement("canvas");
+      c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+      const cc = c.getContext("2d");
+      cc.fillStyle = "#fff"; cc.fillRect(0, 0, c.width, c.height);
+      await pg.render({ canvasContext: cc, viewport: vp }).promise;
+      const nm = file.name.replace(/\.pdf$/i, "") + (doc.numPages > 1 ? " p" + n : "");
+      const L = placeRaster(c, c.width, c.height, nm, "pdf");
+      L.dataURL = c.toDataURL("image/png");
+      added++;
+    } catch (err) { console.error("page " + n, err); toast("Page " + n + " would not render."); }
+  }
+  if (added) toast("Added " + added + " page" + (added > 1 ? "s" : "") + " from " + file.name);
+  draw();
+}
+function askPages(name, total) {
+  return new Promise(res => {
+    modal("Import pages", esc(name) + " has " + total + " pages.",
+      '<div class="row"><label class="f">Pages</label><input type="text" id="mPages" value="1" placeholder="1, 3, 5-7 or all"></div>',
+      () => {
+        const v = $("#mPages").value.trim().toLowerCase();
+        const out = [];
+        if (!v || v === "all") { for (let i = 1; i <= total; i++) out.push(i); }
+        else for (const part of v.split(",")) {
+          const m = part.trim().match(/^(\d+)\s*-\s*(\d+)$/);
+          if (m) { for (let i = +m[1]; i <= +m[2]; i++) out.push(i); }
+          else { const n = parseInt(part, 10); if (n) out.push(n); }
+        }
+        const picked = out.filter(n => n >= 1 && n <= total).slice(0, 60);
+        res(picked.length ? picked : [1]);
+      }, () => res(null));
+    setTimeout(() => { $("#mPages").focus(); $("#mPages").select(); }, 30);
+  });
+}
+/* --------------------------- TIFF import -------------------------- */
+/* Decoded in-page by UTIF — browsers other than Safari cannot render TIFF
+   natively, and scanned site plans are routinely multi-page. */
+async function rgbaToCanvas(rgba, w, h) {
+  const data = new ImageData(new Uint8ClampedArray(rgba), w, h);
+  const MAX = 6000, s = Math.min(1, MAX / Math.max(w, h));
+  if (s < 1 && typeof createImageBitmap === "function") {
+    const bw = Math.max(1, Math.round(w * s)), bh = Math.max(1, Math.round(h * s));
+    try {
+      const bmp = await createImageBitmap(data, { resizeWidth: bw, resizeHeight: bh, resizeQuality: "high" });
+      const c = document.createElement("canvas");
+      c.width = bw; c.height = bh;
+      c.getContext("2d").drawImage(bmp, 0, 0);
+      if (bmp.close) bmp.close();
+      return c;
+    } catch (err) { /* fall through to full size */ }
+  }
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  c.getContext("2d").putImageData(data, 0, 0);
+  return c;
+}
+async function addTIFFFile(file) {
+  if (!window.UTIF) { toast("TIFF decoder unavailable."); return; }
+  const u8 = new Uint8Array(await file.arrayBuffer());
+  let ifds;
+  try { ifds = UTIF.decode(u8); } catch (err) { console.error(err); toast("Could not read " + file.name); return; }
+  const pages = ifds.filter(f => f.t256 && f.t257);        /* real images, not thumbnails or EXIF blocks */
+  if (!pages.length) { toast("No image found in " + file.name); return; }
+  let pick = [0];
+  if (pages.length > 1) {
+    const ans = await askPages(file.name, pages.length);
+    if (ans === null) return;
+    pick = ans.map(n => n - 1);
+  }
+  let added = 0;
+  for (const idx of pick) {
+    try {
+      const ifd = pages[idx];
+      UTIF.decodeImage(u8, ifd, ifds);
+      const rgba = UTIF.toRGBA8(ifd);
+      if (!rgba || !ifd.width || !ifd.height) throw new Error("empty page");
+      const c = await rgbaToCanvas(rgba, ifd.width, ifd.height);
+      const nm = file.name.replace(/\.tiff?$/i, "") + (pages.length > 1 ? " p" + (idx + 1) : "");
+      const L = placeRaster(c, c.width, c.height, nm, "tif");
+      L.dataURL = c.toDataURL("image/png");
+      added++;
+    } catch (err) { console.error(err); toast("Page " + (idx + 1) + " would not decode — it may use an unsupported compression."); }
+  }
+  if (added) toast("Added " + added + " page" + (added > 1 ? "s" : "") + " from " + file.name);
+  draw();
+}
+
+async function handleFiles(list) {
+  for (const f of list) {
+    try {
+      if (/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)) await addPDFFile(f);
+      else if (/tiff?$/i.test(f.type) || /\.tiff?$/i.test(f.name)) await addTIFFFile(f);
+      else if (/^image\//.test(f.type)) await addImageFile(f);
+      else if (/\.(ghostmap|json)$/i.test(f.name)) await loadProject(f);
+      else toast("Skipped " + f.name + " — needs a PDF, TIFF or image.");
+    } catch (err) { console.error(err); toast("Could not read " + f.name); }
+  }
+}
+$("#bAdd").addEventListener("click", () => $("#file").click());
+$("#file").addEventListener("change", e => { handleFiles(e.target.files); e.target.value = ""; });
+$("#bCallout").addEventListener("click", () => {
+  setPlaceMode(placeMode && placeMode.kind === "callout" ? null : { kind: "callout" });
+});
+$("#bMarker").addEventListener("click", () => {
+  setPlaceMode(placeMode && placeMode.kind === "marker" && !placeMode.shape ? null : { kind: "marker" });
+});
+$("#symSel").innerHTML = shapeOptionsInner(null, "Add a symbol\u2026");
+$("#symSel").addEventListener("change", e => {
+  if (!e.target.value) { setPlaceMode(null); return; }
+  setPlaceMode({ kind: "marker", shape: e.target.value });
+});
+
+/* global size steppers — these resize every dot / callout at once */
+$("#mSize").addEventListener("input", e => { markerScale = clamp(+e.target.value || 1, 0.05, 200); draw(); });
+$("#mSdn").addEventListener("click", () => setMarkerScale(sizeStep(markerScale, -1)));
+$("#mSup").addEventListener("click", () => setMarkerScale(sizeStep(markerScale, 1)));
+$("#cSize").addEventListener("input", e => { calloutScale = clamp(+e.target.value || 1, 0.05, 200); draw(); });
+$("#cSdn").addEventListener("click", () => setCalloutScale(sizeStep(calloutScale, -1)));
+$("#cSup").addEventListener("click", () => setCalloutScale(sizeStep(calloutScale, 1)));
+
+addEventListener("paste", async e => {
+  const items = e.clipboardData ? e.clipboardData.items : null; if (!items) return;
+  const files = [];
+  for (const it of items) if (it.kind === "file") { const f = it.getAsFile(); if (f) files.push(f); }
+  if (files.length) { e.preventDefault(); await handleFiles(files); toast("Pasted " + files.length + " layer" + (files.length > 1 ? "s" : "")); }
+});
+let dragDepth = 0;
+stage.addEventListener("dragenter", e => { e.preventDefault(); dragDepth++; $("#drop").classList.add("on"); });
+stage.addEventListener("dragover", e => e.preventDefault());
+stage.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("#drop").classList.remove("on"); } });
+stage.addEventListener("drop", e => {
+  e.preventDefault(); dragDepth = 0; $("#drop").classList.remove("on");
+  if (e.dataTransfer.files && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+
+/* ---------------------------- page setup -------------------------- */
+function applyPage() {
+  $("#pgW").value = Math.round(page.w); $("#pgH").value = Math.round(page.h);
+  const key = Math.round(page.w) + "x" + Math.round(page.h);
+  const p = $("#pgPreset");
+  p.value = [...p.options].some(o => o.value === key) ? key : "custom";
+  draw();
+}
+$("#pgPreset").addEventListener("change", e => {
+  if (e.target.value === "custom") return;
+  const [w, h] = e.target.value.split("x").map(Number);
+  page.w = w; page.h = h; applyPage(); fit();
+});
+$("#pgW").addEventListener("input", e => { page.w = clamp(+e.target.value || 72, 72, 20000); applyPage(); });
+$("#pgH").addEventListener("input", e => { page.h = clamp(+e.target.value || 72, 72, 20000); applyPage(); });
+$("#pgBg").addEventListener("input", e => { page.bg = e.target.value; draw(); });
+$("#bFitSel").addEventListener("click", () => {
+  const L = sel(); if (!L) { toast("Select a layer first."); return; }
+  const { hw, hh } = halfSize(L);
+  page.w = Math.round(hw * 2); page.h = Math.round(hh * 2);
+  const dx = L.x - hw, dy = L.y - hh;
+  for (const l of layers) { l.x -= dx; l.y -= dy; }
+  applyPage(); fit(); renderProps();
+});
+
+/* ------------------------------ view ------------------------------ */
+function fit() {
+  const r = stage.getBoundingClientRect();
+  view.scale = Math.min((r.width - 90) / page.w, (r.height - 90) / page.h);
+  view.ox = (r.width - page.w * view.scale) / 2;
+  view.oy = (r.height - page.h * view.scale) / 2;
+  draw();
+}
+function zoomAt(f) {
+  const r = stage.getBoundingClientRect(), ps = { x: r.width / 2, y: r.height / 2 };
+  const b = s2w(ps); view.scale = clamp(view.scale * f, 0.04, 24);
+  const a = s2w(ps); view.ox += (a.x - b.x) * view.scale; view.oy += (a.y - b.y) * view.scale; draw();
+}
+$("#zIn").addEventListener("click", () => zoomAt(1.2));
+$("#zOut").addEventListener("click", () => zoomAt(1 / 1.2));
+$("#zFit").addEventListener("click", fit);
+$("#tGhost").addEventListener("click", e => {
+  showGhost = !showGhost;
+  e.target.style.color = showGhost ? "var(--acc)" : "";
+  draw();
+});
+$("#tGhost").style.color = "var(--acc)";
+
+/* ----------------------------- export ----------------------------- */
+function renderPage(mult) {
+  const c = document.createElement("canvas");
+  c.width = Math.round(page.w * mult); c.height = Math.round(page.h * mult);
+  const x = c.getContext("2d");
+  x.fillStyle = page.bg; x.fillRect(0, 0, c.width, c.height);
+  x.setTransform(mult, 0, 0, mult, 0, 0);
+  x.imageSmoothingQuality = "high";
+  x.beginPath(); x.rect(0, 0, page.w, page.h); x.clip();
+  for (const L of layers) if (L.visible) drawLayer(x, L, 1);
+  return c;
+}
+$("#bPNG").addEventListener("click", () => {
+  const c = renderPage(+$("#expQ").value);
+  c.toBlob(b => saveBlob(b, "ghostmap.png"));
+});
+$("#bPDF").addEventListener("click", () => {
+  const JS = window.jspdf && window.jspdf.jsPDF;
+  if (!JS) { toast("PDF writer did not load — export a PNG instead."); return; }
+  const c = renderPage(+$("#expQ").value);
+  const pdf = new JS({ unit: "pt", format: [page.w, page.h], orientation: page.w >= page.h ? "l" : "p", compress: true });
+  pdf.addImage(c.toDataURL("image/png"), "PNG", 0, 0, page.w, page.h, undefined, "FAST");
+  pdf.save("ghostmap.pdf");
+  toast("Exported " + Math.round(page.w) + " \u00d7 " + Math.round(page.h) + " pt PDF");
+});
+function saveBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* ---------------------------- project ----------------------------- */
+/* markers for the session block embedded in an HTML export; the closing
+   tag is escaped so this script is not cut short by the HTML parser */
+const S_OPEN = '<script id="gmSession" type="application/json">';
+const S_CLOSE = "<\/script>";
+
+function serialize(withImages) {
+  return {
+    app: "ghostmap", v: 2, savedAt: Date.now(),
+    page: { w: page.w, h: page.h, bg: page.bg },
+    view: { scale: view.scale, ox: view.ox, oy: view.oy },
+    ui: { contents: contentsColor, ghost: showGhost, quality: $("#expQ").value,
+          markerScale: markerScale, calloutScale: calloutScale },
+    layers: layers.map(L => {
+      const o = Object.assign({}, L);
+      delete o.src;
+      if (L.tip) o.tip = { x: L.tip.x, y: L.tip.y };
+      if (withImages === false) delete o.dataURL;
+      else if (L.type === "raster" && !o.dataURL && L.src && L.src.toDataURL) o.dataURL = L.src.toDataURL("image/png");
+      return o;
+    })
+  };
+}
+async function applyData(d, label) {
+  if (!d || d.app !== "ghostmap") { toast("That is not a Ghostmap session."); return false; }
+  booting = true;
+  Object.assign(page, d.page || {});
+  layers = [];
+  let missing = 0;
+  for (const o of (d.layers || [])) {
+    const L = Object.assign({}, o);
+    L.id = nid();
+    if (L.type === "raster") {
+      if (L.dataURL) { try { L.src = await imgFromDataURL(L.dataURL); } catch (err) { L.src = null; missing++; } }
+      else { L.src = null; missing++; }
+    }
+    layers.push(L);
+  }
+  selIds = [];
+  if (d.ui) {
+    setContentsColor(d.ui.contents || CONTENTS_DEFAULT);
+    if (typeof d.ui.ghost === "boolean") { showGhost = d.ui.ghost; $("#tGhost").style.color = showGhost ? "var(--acc)" : ""; }
+    if (d.ui.quality) $("#expQ").value = d.ui.quality;
+    markerScale = d.ui.markerScale || 1; calloutScale = d.ui.calloutScale || 1;
+    syncNum("#mSize", +markerScale.toFixed(2)); syncNum("#cSize", +calloutScale.toFixed(2));
+  }
+  $("#pgBg").value = page.bg;
+  applyPage(); renderLayers(); renderProps();
+  if (d.view && d.view.scale) { Object.assign(view, d.view); draw(); } else fit();
+  if (layers.length) $("#tips").style.display = "none";
+  booting = false;
+  if (missing) toast(missing + " image layer" + (missing > 1 ? "s" : "") + " could not be restored (geometry-only backup).");
+  else if (label) toast(label);
+  return true;
+}
+$("#bSave").addEventListener("click", () => {
+  saveBlob(new Blob([JSON.stringify(serialize())], { type: "application/json" }), "map.ghostmap");
+});
+$("#bLoad").addEventListener("click", () => $("#projFile").click());
+$("#projFile").addEventListener("change", e => { if (e.target.files[0]) loadProject(e.target.files[0]); e.target.value = ""; });
+async function loadProject(file) {
+  const txt = await file.text();
+  let d = null;
+  if (/^\s*</.test(txt)) {                       /* an exported session HTML */
+    /* search from the END: the tag markup also appears in the code above */
+    const i = txt.lastIndexOf(S_OPEN);
+    const j = i < 0 ? -1 : txt.indexOf(S_CLOSE, i + S_OPEN.length);
+    if (j > i) { try { d = JSON.parse(txt.slice(i + S_OPEN.length, j)); } catch (err) { d = null; } }
+  } else { try { d = JSON.parse(txt); } catch (err) { d = null; } }
+  if (!d) { toast("No Ghostmap session found in that file."); return; }
+  await applyData(d, "Opened " + file.name);
+}
+
+/* --------- export the whole session as a working HTML file -------- */
+/* built by concatenation on purpose: a literal closing body tag in this
+   script would be the first match inside PRISTINE_HTML and the session
+   would be injected into the middle of the code */
+const BODY_END = "<" + "/body>";
+$("#bHTML").addEventListener("click", () => {
+  const json = JSON.stringify(serialize()).replace(/</g, "\\u003c").replace(/[\u2028\u2029]/g, "");
+  const tag = S_OPEN + json + S_CLOSE + "\n" + BODY_END;
+  const i = PRISTINE_HTML.lastIndexOf(BODY_END);
+  const html = i < 0 ? PRISTINE_HTML + tag : PRISTINE_HTML.slice(0, i) + tag + PRISTINE_HTML.slice(i + BODY_END.length);
+  const blob = new Blob([html], { type: "text/html" });
+  saveBlob(blob, "ghostmap-session.html");
+  toast("Exported " + (blob.size / 1048576).toFixed(1) + " MB session file");
+});
+
+/* ------------------------- crash autosave ------------------------- */
+/* Layered on purpose: IndexedDB where it is allowed, localStorage when it
+   is not (Chrome blocks IDB on file:// pages), and a geometry-only payload
+   if the images blow the quota. Something survives a crash either way. */
+const DBN = "ghostmap", STORE = "sessions", KEY = "current", LSKEY = "ghostmap.session";
+let dirty = false, saving = false, saveTimer = null, storeMode = "idb", lastSaved = 0;
+
+function openDB() {
+  return new Promise((res, rej) => {
+    let r; try { r = indexedDB.open(DBN, 1); } catch (e) { rej(e); return; }
+    r.onupgradeneeded = () => { try { r.result.createObjectStore(STORE); } catch (e) {} };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error || new Error("indexeddb blocked"));
+    r.onblocked = () => rej(new Error("indexeddb blocked"));
+  });
+}
+function idbOp(mode, fn) {
+  return openDB().then(db => new Promise((res, rej) => {
+    const t = db.transaction(STORE, mode), s = t.objectStore(STORE);
+    const req = fn(s);
+    t.oncomplete = () => { db.close(); res(req ? req.result : null); };
+    t.onerror = () => { db.close(); rej(t.error); };
+    t.onabort = () => { db.close(); rej(t.error || new Error("aborted")); };
+  }));
+}
+async function storePut(data) {
+  if (storeMode === "idb") {
+    try { await idbOp("readwrite", s => s.put(data, KEY)); return "idb"; }
+    catch (e) { storeMode = "ls"; }
+  }
+  if (storeMode === "ls") {
+    try { localStorage.setItem(LSKEY, JSON.stringify(data)); return "ls"; }
+    catch (e) {
+      try {                                   /* too big — keep the layout at least */
+        const lite = serialize(false); lite.partial = true;
+        localStorage.setItem(LSKEY, JSON.stringify(lite));
+        return "lite";
+      } catch (e2) { storeMode = "off"; throw e2; }
+    }
+  }
+  throw new Error("no storage");
+}
+async function storeGet() {
+  try { const v = await idbOp("readonly", s => s.get(KEY)); if (v) return v; }
+  catch (e) { storeMode = "ls"; }
+  try { const t = localStorage.getItem(LSKEY); if (t) return JSON.parse(t); } catch (e) {}
+  return null;
+}
+async function storeClear() {
+  try { await idbOp("readwrite", s => s.delete(KEY)); } catch (e) {}
+  try { localStorage.removeItem(LSKEY); } catch (e) {}
+}
+function saveStatus(kind, text) {
+  const d = $("#saveDot"), t = $("#saveTxt");
+  d.className = kind; t.textContent = text;
+}
+function stamp(ms) {
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+function markDirty() {
+  if (booting || storeMode === "off") return;
+  dirty = true;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => flush(), 1200);
+}
+async function flush(force) {
+  if (saving || (!dirty && !force)) return;
+  if (storeMode === "off") return;
+  saving = true; dirty = false;
+  saveStatus("busy", "Saving\u2026");
+  try {
+    const how = await storePut(serialize());
+    lastSaved = Date.now();
+    saveStatus("ok", how === "lite"
+      ? "Autosaved " + stamp(lastSaved) + " \u2014 layout only, images too large"
+      : "Autosaved " + stamp(lastSaved));
+  } catch (e) {
+    dirty = true;
+    saveStatus("bad", "Autosave unavailable \u2014 use Save project or Export HTML");
+    console.warn("autosave failed", e);
+  } finally { saving = false; }
+}
+setInterval(() => { if (dirty) flush(); }, 15000);
+document.addEventListener("visibilitychange", () => { if (document.hidden) flush(true); });
+addEventListener("pagehide", () => flush(true));
+addEventListener("beforeunload", e => {
+  const pending = dirty || saving;
+  flush(true);
+  /* only nag when an edit has not reached storage yet */
+  if (pending && storeMode !== "off") { e.preventDefault(); e.returnValue = ""; return ""; }
+});
+$("#bRestore").addEventListener("click", async () => {
+  const d = await storeGet();
+  if (!d) { toast("No autosave found."); return; }
+  await applyData(d, "Restored the autosave from " + stamp(d.savedAt || Date.now()));
+});
+$("#bClearAuto").addEventListener("click", async () => {
+  await storeClear(); saveStatus("", "Autosave cleared"); toast("Autosave cleared.");
+});
+
+/* -------------------------- contents color ------------------------ */
+function setContentsColor(c) {
+  contentsColor = c;
+  document.documentElement.style.setProperty("--contents", c);
+  const sw = $("#cBg"); if (sw) sw.value = c;
+}
+const cPop = $("#cPop");
+$("#cBtn").addEventListener("click", e => {
+  e.preventDefault();                       /* keep the section from collapsing */
+  e.stopPropagation();
+  cPop.classList.toggle("on");
+});
+document.addEventListener("click", e => {
+  if (!cPop.contains(e.target) && e.target !== $("#cBtn")) cPop.classList.remove("on");
+});
+addEventListener("keydown", e => { if (e.key === "Escape") cPop.classList.remove("on"); });
+$("#cBg").addEventListener("input", e => { setContentsColor(e.target.value); markDirty(); });
+$("#cBgReset").addEventListener("click", () => { setContentsColor(CONTENTS_DEFAULT); markDirty(); });
+
+/* ----------------------------- modal ------------------------------ */
+function modal(title, sub, body, ok, cancel, okLabel, cancelLabel) {
+  const m = $("#modal");
+  $("#modalCard").innerHTML = "<h3>" + title + "</h3>" + (sub ? "<p>" + sub + "</p>" : "") + body +
+    '<div class="row" style="margin:14px 0 0;justify-content:flex-end"><button class="btn" id="mCancel">' + (cancelLabel || "Cancel") + '</button>' +
+    '<button class="btn pri" id="mOk">' + (okLabel || "OK") + '</button></div>';
+  m.classList.add("on");
+  const close = () => { m.classList.remove("on"); $("#modalCard").innerHTML = ""; $("#modalCard").onkeydown = null; };
+  /* the callback must run while the fields are still in the DOM */
+  $("#mOk").addEventListener("click", () => { try { ok && ok(); } finally { close(); } });
+  $("#mCancel").addEventListener("click", () => { try { cancel && cancel(); } finally { close(); } });
+  $("#modalCard").onkeydown = e => {
+    if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") $("#mOk").click();
+    if (e.key === "Escape") $("#mCancel").click();
+  };
+}
+
+/* ------------------------------ boot ------------------------------ */
+addEventListener("resize", resize);
+if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+
+function start() {
+  setContentsColor(CONTENTS_DEFAULT);
+  applyPage(); renderLayers(); renderProps(); resize(); fit();
+  boot();
+}
+/* wait for the parser: an embedded session tag sits after this script */
+if (document.readyState === "loading") addEventListener("DOMContentLoaded", start);
+else start();
+
+async function boot() {
+  const embed = document.getElementById("gmSession");
+  if (embed) {                                   /* opened from an HTML session export */
+    try {
+      const d = JSON.parse(embed.textContent);
+      booting = false;
+      await applyData(d);
+      saveStatus("ok", "Opened from an exported session");
+      flush(true);
+      return;
+    } catch (err) { console.warn("embedded session unreadable", err); }
+  }
+  booting = false;
+  const saved = await storeGet();
+  if (saved && saved.layers && saved.layers.length) {
+    modal("Recover your last session?",
+      saved.layers.length + " layer" + (saved.layers.length > 1 ? "s" : "") + ", autosaved " +
+        new Date(saved.savedAt || Date.now()).toLocaleString() + ".",
+      '<div class="hint">Starting a new map discards this backup.' +
+      (saved.partial ? " This backup holds layer positions only \u2014 the images were too large to store." : "") + "</div>",
+      async () => { await applyData(saved, "Session recovered"); },
+      async () => { await storeClear(); saveStatus("", "Autosave ready"); },
+      "Recover", "Start new map");
+  } else saveStatus("", "Autosave ready");
+}
+</script>
+</body>
+</html>
