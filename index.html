@@ -158,6 +158,11 @@ kbd{font-family:var(--mono);font-size:10.5px;background:#0f1319;border:1px solid
           <button class="btn grow" id="bCallout">Callout box</button>
           <button class="btn grow" id="bMarker">Marker dot</button>
         </div>
+        <div class="row">
+          <button class="btn grow" id="bLine" title="Two-point line (L)">Line</button>
+          <button class="btn grow" id="bSeg" title="Multi-segment line (S)">Segment line</button>
+          <button class="btn grow" id="bPoly" title="Closed polygon (P)">Polygon</button>
+        </div>
         <div class="row"><label class="f">Symbol</label>
           <select id="symSel"><option value="">Add a symbol&hellip;</option></select></div>
         <div class="row"><label class="f">Dot size</label>
@@ -170,7 +175,12 @@ kbd{font-family:var(--mono);font-size:10.5px;background:#0f1319;border:1px solid
           <input type="number" id="cSize" step="0.1" min="0.05" value="1.0">
           <button class="btn icon" id="cSup">+</button>
           <span class="hint">&times;</span></div>
-        <div class="hint">Size applies to every dot / callout on the map at once.</div>
+        <div class="row"><label class="f">Line weight</label>
+          <button class="btn icon" id="lSdn">&minus;</button>
+          <input type="number" id="lSize" step="0.1" min="0.05" value="1.0">
+          <button class="btn icon" id="lSup">+</button>
+          <span class="hint">&times;</span></div>
+        <div class="hint">Size applies to every dot / callout / line on the map at once.</div>
         <div class="hint">Drop files anywhere on the map, or press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste an image from the clipboard as a new layer. Multi-page PDFs and TIFFs ask which pages you want.</div>
         <input type="file" id="file" accept="application/pdf,image/*,.tif,.tiff" multiple hidden>
       </div>
@@ -240,12 +250,18 @@ kbd{font-family:var(--mono);font-size:10.5px;background:#0f1319;border:1px solid
 
     <details class="sec"><summary>Shortcuts</summary>
       <div class="secbody hint" style="line-height:1.9">
+        <kbd>L</kbd> line &middot; <kbd>S</kbd> segment line &middot; <kbd>P</kbd> polygon<br>
+        <kbd>Enter</kbd> finish shape &middot; right-click also finishes<br>
+        <kbd>Backspace</kbd> drop last vertex while drawing<br>
         <kbd>V</kbd> paste image &middot; <kbd>Del</kbd> delete layer<br>
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo &middot; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> redo<br>
         <kbd>&larr;&uarr;&darr;&rarr;</kbd> nudge &middot; <kbd>Shift</kbd> nudge &times;10<br>
         <kbd>[</kbd> <kbd>]</kbd> rotate 1&deg; &middot; with <kbd>Shift</kbd> 15&deg;<br>
-        <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate &middot; <kbd>Esc</kbd> deselect<br>
+        <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate &middot; <kbd>Esc</kbd> cancel / deselect<br>
         <kbd>Space</kbd>+drag or middle-drag to pan &middot; wheel to zoom<br>
-        Double-click a callout to edit its text
+        <kbd>Shift</kbd> constrains a new segment to 45&deg;<br>
+        Double-click a callout to edit its text<br>
+        Drag amber midpoints to add a vertex; Alt-click a vertex to remove it
       </div>
     </details>
   </div>
@@ -1468,9 +1484,26 @@ let uid = 1;
 let booting = true;                      /* suppresses autosave while a session loads */
 const CONTENTS_DEFAULT = "#1b3a52";       /* dark baby blue */
 let contentsColor = CONTENTS_DEFAULT;
-let markerScale = 1, calloutScale = 1;   /* global size multipliers, applied to every dot / callout */
-let placeMode = null;                    /* {kind:"marker"|"callout", shape} while waiting for a map click */
+let markerScale = 1, calloutScale = 1, pathScale = 1; /* global size multipliers */
+let placeMode = null;                    /* {kind:"marker"|"callout"|"path", shape} while waiting for a map click */
+let sketch = null;                       /* in-progress path: {kind, pts, hover} */
 const DEG = Math.PI / 180;
+const SNAP_PX = 10;
+const PATH_HIT_PX = 8;
+let lastPathStyle = {
+  stroke: "#1a1a1a", strokeW: 1.5, dash: "solid",
+  fill: "#8e44ad", fillOpacity: 0.28, arrows: "none", endCaps: "none",
+  label: "", color: "#111111", fontSize: 11
+};
+const PATH_PRESETS = {
+  property: { name: "Property line", stroke: "#111111", strokeW: 1.4, dash: "dash", arrows: "none", fillOpacity: 0, endCaps: "none", label: "PL" },
+  excav:    { name: "Excavation limit", stroke: "#c0392b", strokeW: 1.8, dash: "solid", arrows: "none", fillOpacity: 0, endCaps: "none", label: "" },
+  utility:  { name: "Utility", stroke: "#e67e22", strokeW: 1.4, dash: "dashdot", arrows: "none", fillOpacity: 0, endCaps: "none", label: "" },
+  gwf:      { name: "Groundwater flow", stroke: "#2471a3", strokeW: 1.6, dash: "solid", arrows: "end", fillOpacity: 0, endCaps: "none", label: "GWF" },
+  section:  { name: "Section line", stroke: "#111111", strokeW: 1.5, dash: "solid", arrows: "none", fillOpacity: 0, endCaps: "tick", label: "A" },
+  plume:    { name: "Plume / exceedance", stroke: "#6c3483", strokeW: 1.2, dash: "solid", arrows: "none", fill: "#9b59b6", fillOpacity: 0.28, endCaps: "none", label: "" },
+  source:   { name: "Source area", stroke: "#922b21", strokeW: 1.6, dash: "solid", arrows: "none", fill: "#c0392b", fillOpacity: 0.34, endCaps: "none", label: "" }
+};
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const nid = () => "L" + (uid++);
@@ -1486,8 +1519,22 @@ const isSel = id => selIds.includes(id);
 function halfSize(L) {
   if (L.type === "raster") return { hw: L.w * L.scale / 2, hh: L.h * L.scale / 2 };
   if (L.type === "callout") return { hw: L.w * calloutScale / 2, hh: L.h * calloutScale / 2 };
+  if (L.type === "path") {
+    const b = pathBounds(L);
+    return { hw: Math.max(8, b.w / 2), hh: Math.max(8, b.h / 2) };
+  }
   const r = L.r * markerScale;
   return { hw: r, hh: r };
+}
+function pathBounds(L) {
+  const pts = L.pts || [];
+  if (!pts.length) return { x: 0, y: 0, w: 16, h: 16 };
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) {
+    if (p.x < x0) x0 = p.x; if (p.y < y0) y0 = p.y;
+    if (p.x > x1) x1 = p.x; if (p.y > y1) y1 = p.y;
+  }
+  return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
 }
 function toLocal(L, p) {
   const a = -L.rot * DEG, dx = p.x - L.x, dy = p.y - L.y;
@@ -1686,6 +1733,95 @@ function drawMarker(c, L) {
     c.fillStyle = L.color; c.fillText(L.label, x, 0);
   }
 }
+function dashFor(style, sw) {
+  if (style === "dash") return [Math.max(4, 7 * sw), Math.max(3, 4.5 * sw)];
+  if (style === "dot") return [Math.max(1, 1.15 * sw), Math.max(2.2, 3.2 * sw)];
+  if (style === "dashdot") return [Math.max(5, 8 * sw), Math.max(3, 3.6 * sw), Math.max(1, 1.2 * sw), Math.max(3, 3.6 * sw)];
+  return [];
+}
+function pathIsClosed(L) { return L.kind === "polygon"; }
+function strokePathPts(c, pts, closed) {
+  if (!pts.length) return;
+  c.beginPath();
+  c.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
+  if (closed && pts.length > 2) c.closePath();
+}
+function drawArrowhead(c, from, to, size, color) {
+  const dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  const hx = to.x - ux * size, hy = to.y - uy * size;
+  const px = -uy, py = ux;
+  c.beginPath();
+  c.moveTo(to.x, to.y);
+  c.lineTo(hx + px * size * 0.46, hy + py * size * 0.46);
+  c.lineTo(hx - px * size * 0.46, hy - py * size * 0.46);
+  c.closePath();
+  c.fillStyle = color;
+  c.fill();
+}
+function drawEndTick(c, from, to, size, color, sw) {
+  const dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy) || 1;
+  const px = -dy / len, py = dx / len;
+  c.beginPath();
+  c.moveTo(to.x - px * size, to.y - py * size);
+  c.lineTo(to.x + px * size, to.y + py * size);
+  c.strokeStyle = color; c.lineWidth = sw; c.setLineDash([]);
+  c.stroke();
+}
+function centroidPts(pts) {
+  if (!pts.length) return { x: 0, y: 0 };
+  let x = 0, y = 0;
+  for (const p of pts) { x += p.x; y += p.y; }
+  return { x: x / pts.length, y: y / pts.length };
+}
+function drawPath(c, L) {
+  const pts = L.pts || [];
+  if (pts.length < 2) return;
+  const closed = pathIsClosed(L);
+  const sw = Math.max(0.4, (L.strokeW || 1.5) * pathScale);
+  const stroke = L.stroke || "#111";
+  if (closed && (L.fillOpacity || 0) > 0.01) {
+    strokePathPts(c, pts, true);
+    const fo = clamp(L.fillOpacity, 0, 1);
+    const prev = c.globalAlpha;
+    c.globalAlpha = prev * fo;
+    c.fillStyle = L.fill || stroke;
+    c.fill();
+    c.globalAlpha = prev;
+  }
+  strokePathPts(c, pts, closed);
+  c.strokeStyle = stroke;
+  c.lineWidth = sw;
+  c.lineJoin = "round";
+  c.lineCap = "round";
+  c.setLineDash(dashFor(L.dash, sw));
+  c.stroke();
+  c.setLineDash([]);
+  if (!closed && pts.length >= 2) {
+    const a = pts[0], b = pts[1], c1 = pts[pts.length - 2], d = pts[pts.length - 1];
+    if (L.arrows === "start" || L.arrows === "both") drawArrowhead(c, b, a, Math.max(7, sw * 4.2), stroke);
+    if (L.arrows === "end" || L.arrows === "both") drawArrowhead(c, c1, d, Math.max(7, sw * 4.2), stroke);
+    if (L.endCaps === "tick") {
+      drawEndTick(c, b, a, Math.max(6, sw * 3.6), stroke, sw);
+      drawEndTick(c, c1, d, Math.max(6, sw * 3.6), stroke, sw);
+    }
+  }
+  if (L.label) {
+    const fs = (L.fontSize || 11) * Math.max(0.75, pathScale);
+    const at = closed ? centroidPts(pts) : {
+      x: (pts[0].x + pts[pts.length - 1].x) / 2,
+      y: (pts[0].y + pts[pts.length - 1].y) / 2
+    };
+    c.font = "600 " + fs + "px system-ui, sans-serif";
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.lineWidth = Math.max(2, fs * 0.22);
+    c.strokeStyle = "rgba(255,255,255,.88)";
+    c.strokeText(L.label, at.x, at.y - fs * 0.9);
+    c.fillStyle = L.color || "#111";
+    c.fillText(L.label, at.x, at.y - fs * 0.9);
+  }
+}
 function drawLayer(c, L, alphaMul) {
   c.save();
   c.globalAlpha = L.opacity * alphaMul;
@@ -1696,6 +1832,7 @@ function drawLayer(c, L, alphaMul) {
     const w = L.w * L.scale, h = L.h * L.scale;
     if (L.src) c.drawImage(L.src, -w / 2, -h / 2, w, h);
   } else if (L.type === "callout") drawCallout(c, L);
+  else if (L.type === "path") drawPath(c, L);
   else drawMarker(c, L);
   c.restore();
 }
@@ -1744,6 +1881,7 @@ function draw() {
 
   ctx.strokeStyle = "rgba(255,255,255,.22)"; ctx.lineWidth = 1 / view.scale;
   ctx.strokeRect(0, 0, page.w, page.h);
+  drawSketch(ctx);
   ctx.restore();
 
   drawSelection();
@@ -1758,12 +1896,25 @@ function handlePts(L) {
   const corners = [{ x: -hw, y: -hh }, { x: hw, y: -hh }, { x: hw, y: hh }, { x: -hw, y: hh }]
     .map(p => w2s(toWorld(L, p)));
   const topMid = w2s(toWorld(L, { x: 0, y: -hh }));
-  const out = { corners, topMid };
+  const out = { corners, topMid, verts: [], mids: [] };
   if (L.type === "raster") {                   /* dots and callouts are never rotated */
     const a = L.rot * DEG;
     out.rot = { x: topMid.x + Math.sin(a) * 26, y: topMid.y - Math.cos(a) * 26 };
   }
   if (L.type === "callout" && L.leader) out.tip = w2s(toWorld(L, L.tip));
+  if (L.type === "path" && L.pts) {
+    out.verts = L.pts.map((p, i) => {
+      const s = w2s(toWorld(L, p));
+      return { i, x: s.x, y: s.y };
+    });
+    const n = L.pts.length;
+    const last = pathIsClosed(L) ? n : n - 1;
+    for (let i = 0; i < last; i++) {
+      const a = L.pts[i], b = L.pts[(i + 1) % n];
+      const s = w2s(toWorld(L, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }));
+      out.mids.push({ i, x: s.x, y: s.y });
+    }
+  }
   return out;
 }
 function drawSelection() {
@@ -1774,6 +1925,14 @@ function drawSelection() {
   for (const S of selLayers()) {              /* every co-selected item gets a light box */
     if (!S.visible || S === prim) continue;
     const g = handlePts(S);
+    if (S.type === "path" && g.verts.length) {
+      ctx.beginPath();
+      ctx.moveTo(g.verts[0].x, g.verts[0].y);
+      for (let i = 1; i < g.verts.length; i++) ctx.lineTo(g.verts[i].x, g.verts[i].y);
+      if (pathIsClosed(S)) ctx.closePath();
+      ctx.stroke();
+      continue;
+    }
     ctx.beginPath(); ctx.moveTo(g.corners[0].x, g.corners[0].y);
     for (let i = 1; i < 4; i++) ctx.lineTo(g.corners[i].x, g.corners[i].y);
     ctx.closePath(); ctx.stroke();
@@ -1782,6 +1941,28 @@ function drawSelection() {
   if (!L || !L.visible) { ctx.restore(); return; }
   const h = handlePts(L);
   ctx.strokeStyle = "#5ec8dc"; ctx.lineWidth = 1;
+  if (L.type === "path") {
+    if (h.verts.length) {
+      ctx.beginPath();
+      ctx.moveTo(h.verts[0].x, h.verts[0].y);
+      for (let i = 1; i < h.verts.length; i++) ctx.lineTo(h.verts[i].x, h.verts[i].y);
+      if (pathIsClosed(L)) ctx.closePath();
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#e0a458"; ctx.strokeStyle = "#0d1015";
+    for (const m of h.mids) {
+      ctx.beginPath();
+      ctx.moveTo(m.x, m.y - 4); ctx.lineTo(m.x + 4, m.y);
+      ctx.lineTo(m.x, m.y + 4); ctx.lineTo(m.x - 4, m.y);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle = "#0d1015"; ctx.strokeStyle = "#5ec8dc";
+    for (const p of h.verts) {
+      ctx.beginPath(); ctx.rect(p.x - HANDLE, p.y - HANDLE, HANDLE * 2, HANDLE * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
   ctx.beginPath();
   ctx.moveTo(h.corners[0].x, h.corners[0].y);
   for (let i = 1; i < 4; i++) ctx.lineTo(h.corners[i].x, h.corners[i].y);
@@ -1799,15 +1980,99 @@ function drawSelection() {
   }
   ctx.restore();
 }
+function distToSeg(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  if (l2 < 1e-8) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / l2;
+  t = clamp(t, 0, 1);
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+function pointInPoly(pts, x, y) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-9) + xi)) inside = !inside;
+  }
+  return inside;
+}
+function hitPath(L, p) {
+  const pts = L.pts || [];
+  if (pts.length < 2) return false;
+  const tol = Math.max((L.strokeW || 1.5) * pathScale + 2, PATH_HIT_PX / view.scale);
+  const n = pts.length;
+  const last = pathIsClosed(L) ? n : n - 1;
+  for (let i = 0; i < last; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    if (distToSeg(p.x, p.y, a.x, a.y, b.x, b.y) <= tol) return true;
+  }
+  if (pathIsClosed(L) && (L.fillOpacity || 0) > 0.04 && pointInPoly(pts, p.x, p.y)) return true;
+  return false;
+}
 function hitLayer(pw) {
   for (let i = layers.length - 1; i >= 0; i--) {
     const L = layers[i]; if (!L.visible) continue;
     const p = toLocal(L, pw);
     if (L.type === "marker") { if (Math.hypot(p.x, p.y) <= L.r * markerScale + 3) return L; continue; }
+    if (L.type === "path") { if (hitPath(L, p)) return L; continue; }
     const { hw, hh } = halfSize(L);
     if (Math.abs(p.x) <= hw && Math.abs(p.y) <= hh) return L;
   }
   return null;
+}
+function constrain45(from, to) {
+  const dx = to.x - from.x, dy = to.y - from.y;
+  const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+  const len = Math.hypot(dx, dy);
+  return { x: from.x + Math.cos(ang) * len, y: from.y + Math.sin(ang) * len };
+}
+function snapWorld(pw) {
+  const tol = SNAP_PX / view.scale;
+  let best = null, bestD = tol;
+  const consider = (x, y) => {
+    const d = Math.hypot(pw.x - x, pw.y - y);
+    if (d <= bestD) { bestD = d; best = { x, y }; }
+  };
+  for (const L of layers) {
+    if (!L.visible) continue;
+    if (L.type === "marker") consider(L.x, L.y);
+    if (L.type === "path" && L.pts) {
+      for (const p of L.pts) {
+        const w = toWorld(L, p);
+        consider(w.x, w.y);
+      }
+    }
+  }
+  if (sketch) for (const p of sketch.pts) consider(p.x, p.y);
+  return best || pw;
+}
+function drawSketch(c) {
+  if (!sketch || !sketch.pts.length) return;
+  const pts = sketch.pts.slice();
+  if (sketch.hover) pts.push(sketch.hover);
+  const closed = sketch.kind === "polygon" && pts.length > 2;
+  c.save();
+  c.strokeStyle = "#5ec8dc";
+  c.lineWidth = 1.4 / view.scale;
+  c.setLineDash([5 / view.scale, 4 / view.scale]);
+  strokePathPts(c, pts, false);
+  c.stroke();
+  if (closed) {
+    c.setLineDash([3 / view.scale, 4 / view.scale]);
+    c.beginPath();
+    c.moveTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+    c.lineTo(pts[0].x, pts[0].y);
+    c.stroke();
+  }
+  c.setLineDash([]);
+  c.fillStyle = "#5ec8dc";
+  for (const p of sketch.pts) {
+    c.beginPath(); c.arc(p.x, p.y, 3.2 / view.scale, 0, TAU); c.fill();
+  }
+  if (sketch.hover) {
+    c.strokeStyle = "#e0a458";
+    c.beginPath(); c.arc(sketch.hover.x, sketch.hover.y, 4.2 / view.scale, 0, TAU); c.stroke();
+  }
+  c.restore();
 }
 
 /* --------------------------- interaction -------------------------- */
@@ -1816,16 +2081,42 @@ cv.addEventListener("pointerdown", e => {
   cv.setPointerCapture(e.pointerId);
   const ps = evPt(e), pw = s2w(ps);
   if (e.button === 1 || spaceDown) { drag = { mode: "pan", ps, ox: view.ox, oy: view.oy }; return; }
+  if (placeMode && placeMode.kind === "path") {
+    if (e.button === 2) { finishSketch(); return; }
+    if (e.button === 0) { sketchClick(pw, e); return; }
+  }
   if (placeMode && e.button === 0) { placeAt(pw); return; }
   const L = sel();
   if (L && L.visible) {
     const h = handlePts(L);
     const near = (p, r) => p && Math.hypot(ps.x - p.x, ps.y - p.y) <= r;
-    if (near(h.rot, 10)) { drag = { mode: "rot", L, start: Math.atan2(pw.y - L.y, pw.x - L.x) / DEG, rot0: L.rot }; return; }
-    if (near(h.tip, 9)) { drag = { mode: "tip", L }; return; }
-    for (let i = 0; i < 4; i++) if (near(h.corners[i], 9)) {
-      drag = { mode: "size", L, s0: L.scale, w0: L.w, h0: L.h, r0: L.r, l0: toLocal(L, pw) };
-      return;
+    if (L.type === "path") {
+      if (e.altKey) {
+        const v = h.verts.find(p => near(p, 9));
+        if (v) { deletePathVertex(L, v.i); return; }
+      }
+      const v = h.verts.find(p => near(p, 9));
+      if (v) {
+        pushUndo();
+        drag = { mode: "vert", L, i: v.i };
+        return;
+      }
+      const mid = h.mids.find(p => near(p, 8));
+      if (mid) {
+        pushUndo();
+        L.pts.splice(mid.i + 1, 0, { x: (L.pts[mid.i].x + L.pts[(mid.i + 1) % L.pts.length].x) / 2, y: (L.pts[mid.i].y + L.pts[(mid.i + 1) % L.pts.length].y) / 2 });
+        drag = { mode: "vert", L, i: mid.i + 1 };
+        draw();
+        return;
+      }
+    } else {
+      if (near(h.rot, 10)) { pushUndo(); drag = { mode: "rot", L, start: Math.atan2(pw.y - L.y, pw.x - L.x) / DEG, rot0: L.rot }; return; }
+      if (near(h.tip, 9)) { pushUndo(); drag = { mode: "tip", L }; return; }
+      for (let i = 0; i < 4; i++) if (near(h.corners[i], 9)) {
+        pushUndo();
+        drag = { mode: "size", L, s0: L.scale, w0: L.w, h0: L.h, r0: L.r, l0: toLocal(L, pw) };
+        return;
+      }
     }
   }
   const hit = hitLayer(pw);
@@ -1838,6 +2129,7 @@ cv.addEventListener("pointerdown", e => {
     } else if (!isSel(hit.id)) {
       selIds = [hit.id]; renderLayers(); renderProps();
     }
+    pushUndo();
     drag = { mode: "move", L: hit, ps, group: selLayers().map(l => ({ l: l, x0: l.x, y0: l.y })) };
     draw(); return;
   }
@@ -1861,8 +2153,66 @@ function placeAt(pw) {
     renderLayers(); renderProps(); draw();
   }
 }
+function sketchPoint(pw, shift) {
+  let p = snapWorld(pw);
+  if (shift && sketch && sketch.pts.length) p = constrain45(sketch.pts[sketch.pts.length - 1], p);
+  return p;
+}
+function sketchClick(pw, e) {
+  const kind = placeMode && placeMode.shape;
+  if (!kind) return;
+  const p = sketchPoint(pw, e.shiftKey);
+  if (!sketch) {
+    sketch = { kind, pts: [p], hover: null };
+    draw();
+    return;
+  }
+  const first = sketch.pts[0];
+  if (kind === "polygon" && sketch.pts.length >= 3 && Math.hypot(p.x - first.x, p.y - first.y) <= SNAP_PX / view.scale) {
+    finishSketch(true);
+    return;
+  }
+  const last = sketch.pts[sketch.pts.length - 1];
+  if (Math.hypot(p.x - last.x, p.y - last.y) < 1 / view.scale) return;
+  sketch.pts.push(p);
+  if (kind === "line" && sketch.pts.length >= 2) finishSketch(true);
+  else draw();
+}
+function finishSketch(keepTool) {
+  if (keepTool === undefined) keepTool = true;
+  if (!sketch) { if (!keepTool) setPlaceMode(null); return; }
+  const kind = sketch.kind;
+  const pts = sketch.pts;
+  const need = kind === "polygon" ? 3 : 2;
+  if (pts.length < need) {
+    toast(kind === "polygon" ? "A polygon needs at least 3 corners." : "Need two points to make a line.");
+    sketch = null;
+    draw();
+    return;
+  }
+  const L = newPath(kind, pts);
+  sketch = null;
+  addLayer(L);
+  if (keepTool) {
+    placeMode = { kind: "path", shape: kind };
+    setPlaceMode(placeMode);
+  } else setPlaceMode(null);
+}
+function cancelSketch() {
+  sketch = null;
+  setPlaceMode(null);
+  draw();
+}
 cv.addEventListener("pointermove", e => {
   const ps = evPt(e);
+  if (placeMode && placeMode.kind === "path" && !drag) {
+    if (sketch) {
+      sketch.hover = sketchPoint(s2w(ps), e.shiftKey);
+      draw();
+    }
+    cv.style.cursor = "crosshair";
+    return;
+  }
   if (!drag) {
     const L = sel(); let cur = "default";
     if (L && L.visible) {
@@ -1870,7 +2220,9 @@ cv.addEventListener("pointermove", e => {
       const near = (p, r) => p && Math.hypot(ps.x - p.x, ps.y - p.y) <= r;
       if (near(h.rot, 10)) cur = "grab";
       else if (near(h.tip, 9)) cur = "move";
-      else if (h.corners.some(p => near(p, 9))) cur = "nwse-resize";
+      else if (h.verts && h.verts.some(p => near(p, 9))) cur = "move";
+      else if (h.mids && h.mids.some(p => near(p, 8))) cur = "copy";
+      else if (L.type !== "path" && h.corners.some(p => near(p, 9))) cur = "nwse-resize";
     }
     if (cur === "default" && hitLayer(s2w(ps))) cur = "move";
     if (spaceDown) cur = "grab";
@@ -1891,6 +2243,14 @@ cv.addEventListener("pointermove", e => {
     syncNum("#pRot", L.rot.toFixed(1)); syncNum("#pRotR", L.rot);
   } else if (drag.mode === "tip") {
     L.tip = toLocal(L, pw);
+  } else if (drag.mode === "vert") {
+    let p = snapWorld(pw);
+    if (e.shiftKey && L.pts[drag.i]) {
+      const prev = L.pts[drag.i === 0 ? L.pts.length - 1 : drag.i - 1];
+      const wprev = toWorld(L, prev);
+      p = constrain45(wprev, p);
+    }
+    L.pts[drag.i] = toLocal(L, p);
   } else if (drag.mode === "size") {
     const l = toLocal(L, pw);
     if (L.type === "raster") {
@@ -1911,7 +2271,10 @@ cv.addEventListener("pointermove", e => {
 function endDrag() { if (drag) { drag = null; renderProps(); } }
 cv.addEventListener("pointerup", endDrag);
 cv.addEventListener("pointercancel", endDrag);
-cv.addEventListener("contextmenu", e => e.preventDefault());
+cv.addEventListener("contextmenu", e => {
+  e.preventDefault();
+  if (placeMode && placeMode.kind === "path") finishSketch();
+});
 cv.addEventListener("wheel", e => {
   e.preventDefault();
   const ps = evPt(e), before = s2w(ps);
@@ -1923,6 +2286,7 @@ cv.addEventListener("wheel", e => {
   draw();
 }, { passive: false });
 cv.addEventListener("dblclick", e => {
+  if (placeMode && placeMode.kind === "path") { finishSketch(true); return; }
   const L = hitLayer(s2w(evPt(e)));
   if (L && L.type === "callout") { selIds = [L.id]; renderLayers(); renderProps(); openEditor(L); }
 });
@@ -1957,12 +2321,32 @@ addEventListener("keydown", e => {
   if (e.code === "Space" && !spaceDown && e.target === document.body) { spaceDown = true; cv.style.cursor = "grab"; e.preventDefault(); }
   const tag = (e.target.tagName || "").toLowerCase();
   if (tag === "input" || tag === "textarea" || tag === "select") return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+    e.preventDefault();
+    if (e.shiftKey) redo(); else undo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
+  const k = e.key.toLowerCase();
+  if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (k === "l") { e.preventDefault(); togglePathTool("line"); return; }
+    if (k === "s") { e.preventDefault(); togglePathTool("segment"); return; }
+    if (k === "p") { e.preventDefault(); togglePathTool("polygon"); return; }
+  }
+  if (e.key === "Enter" && sketch) { e.preventDefault(); finishSketch(true); return; }
+  if (e.key === "Backspace" && sketch) {
+    e.preventDefault();
+    sketch.pts.pop();
+    if (!sketch.pts.length) { sketch = null; draw(); }
+    else draw();
+    return;
+  }
   const L = sel(), group = selLayers();
   if ((e.key === "Delete" || e.key === "Backspace") && group.length) {
     e.preventDefault(); removeLayers(group.map(l => l.id)); return;
   }
   if (e.key === "Escape") {
-    if (placeMode) { setPlaceMode(null); return; }
+    if (sketch || placeMode) { cancelSketch(); return; }
     selIds = []; renderLayers(); renderProps(); draw(); return;
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d" && L) { e.preventDefault(); duplicate(L); return; }
@@ -1982,7 +2366,56 @@ const norm = a => ((a % 360) + 360) % 360;
 function syncNum(sel_, v) { const el = $(sel_); if (el && document.activeElement !== el) el.value = v; }
 
 /* ---------------------------- layers ------------------------------ */
+function cloneLayer(L) {
+  const o = Object.assign({}, L);
+  if (L.tip) o.tip = { x: L.tip.x, y: L.tip.y };
+  if (L.pts) o.pts = L.pts.map(p => ({ x: p.x, y: p.y }));
+  return o;
+}
+let undoStack = [], redoStack = [], undoLock = false;
+function snapshotState() {
+  return {
+    layers: layers.map(cloneLayer),
+    selIds: selIds.slice(),
+    page: Object.assign({}, page),
+    markerScale, calloutScale, pathScale, uid,
+    lastPathStyle: Object.assign({}, lastPathStyle)
+  };
+}
+function applyState(s) {
+  undoLock = true;
+  layers = s.layers.map(cloneLayer);
+  selIds = s.selIds.slice();
+  Object.assign(page, s.page);
+  markerScale = s.markerScale; calloutScale = s.calloutScale; pathScale = s.pathScale;
+  uid = s.uid || uid;
+  if (s.lastPathStyle) lastPathStyle = Object.assign({}, s.lastPathStyle);
+  syncNum("#mSize", +markerScale.toFixed(2));
+  syncNum("#cSize", +calloutScale.toFixed(2));
+  syncNum("#lSize", +pathScale.toFixed(2));
+  $("#pgBg").value = page.bg;
+  applyPage(); renderLayers(); renderProps(); draw();
+  undoLock = false;
+}
+function pushUndo() {
+  if (undoLock || booting) return;
+  undoStack.push(snapshotState());
+  if (undoStack.length > 80) undoStack.shift();
+  redoStack = [];
+}
+function undo() {
+  if (sketch) { cancelSketch(); return; }
+  if (!undoStack.length) { toast("Nothing to undo"); return; }
+  redoStack.push(snapshotState());
+  applyState(undoStack.pop());
+}
+function redo() {
+  if (!redoStack.length) { toast("Nothing to redo"); return; }
+  undoStack.push(snapshotState());
+  applyState(redoStack.pop());
+}
 function addLayer(L) {
+  pushUndo();
   L.id = nid();
   layers.push(L);
   selIds = [L.id];
@@ -1993,22 +2426,47 @@ function addLayer(L) {
 }
 function removeLayer(id) { removeLayers([id]); }
 function removeLayers(ids) {
+  pushUndo();
   layers = layers.filter(l => !ids.includes(l.id));
   selIds = selIds.filter(i => !ids.includes(i));
   renderLayers(); renderProps(); draw();
 }
 function duplicate(L) {
-  const c = Object.assign({}, L);
-  if (L.tip) c.tip = { x: L.tip.x, y: L.tip.y };
+  const c = cloneLayer(L);
   c.x += 16; c.y += 16; c.name = L.name + " copy";
   addLayer(c);
 }
 function move(id, dir) {
   const i = layers.findIndex(l => l.id === id); if (i < 0) return;
+  pushUndo();
   let j = dir === "front" ? layers.length - 1 : dir === "back" ? 0 : i + dir;
   j = clamp(j, 0, layers.length - 1);
   const [L] = layers.splice(i, 1); layers.splice(j, 0, L);
   renderLayers(); draw();
+}
+function deletePathVertex(L, i) {
+  const min = pathIsClosed(L) ? 3 : 2;
+  if (!L.pts || L.pts.length <= min) { toast("That shape cannot lose another corner."); return; }
+  pushUndo();
+  L.pts.splice(i, 1);
+  renderProps(); draw();
+}
+function rememberPathStyle(L) {
+  lastPathStyle = {
+    stroke: L.stroke, strokeW: L.strokeW, dash: L.dash,
+    fill: L.fill, fillOpacity: L.fillOpacity, arrows: L.arrows, endCaps: L.endCaps,
+    label: L.label || "", color: L.color, fontSize: L.fontSize
+  };
+}
+function applyPathPreset(L, key) {
+  const p = PATH_PRESETS[key]; if (!p) return;
+  L.name = p.name;
+  L.stroke = p.stroke; L.strokeW = p.strokeW; L.dash = p.dash;
+  L.arrows = p.arrows; L.endCaps = p.endCaps;
+  if (p.fill) L.fill = p.fill;
+  L.fillOpacity = p.fillOpacity;
+  if (p.label != null) L.label = p.label;
+  rememberPathStyle(L);
 }
 function newCallout(text, x, y) {
   return {
@@ -2027,6 +2485,21 @@ function newMarker(x, y) {
     label: "", color: "#111111", fontSize: 12, font: "system-ui, sans-serif"
   };
 }
+function newPath(kind, worldPts) {
+  const origin = worldPts[0];
+  const names = { line: "Line", segment: "Segment line", polygon: "Polygon" };
+  return {
+    type: "path", kind: kind, name: names[kind] || "Line",
+    visible: true, opacity: 1,
+    x: origin.x, y: origin.y, rot: 0, scale: 1,
+    pts: worldPts.map(p => ({ x: p.x - origin.x, y: p.y - origin.y })),
+    stroke: lastPathStyle.stroke, strokeW: lastPathStyle.strokeW, dash: lastPathStyle.dash,
+    fill: lastPathStyle.fill, fillOpacity: kind === "polygon" ? lastPathStyle.fillOpacity : 0,
+    arrows: kind === "polygon" ? "none" : lastPathStyle.arrows,
+    endCaps: kind === "polygon" ? "none" : lastPathStyle.endCaps,
+    label: lastPathStyle.label || "", color: lastPathStyle.color, fontSize: lastPathStyle.fontSize
+  };
+}
 function centerOfView() {
   const r = stage.getBoundingClientRect();
   return s2w({ x: r.width / 2, y: r.height / 2 });
@@ -2038,7 +2511,7 @@ function renderLayers() {
   const box = $("#layers");
   box.innerHTML = "";
   if (!layers.length) {
-    box.innerHTML = '<div class="empty">No layers yet. Add a PDF, an image, a callout or a marker &mdash; the newest layer sits on top.</div>';
+    box.innerHTML = '<div class="empty">No layers yet. Add a PDF, an image, a callout, a marker or a line &mdash; the newest layer sits on top.</div>';
     return;
   }
   for (let i = layers.length - 1; i >= 0; i--) {
@@ -2046,7 +2519,10 @@ function renderLayers() {
     const el = document.createElement("div");
     el.className = "lay" + (isSel(L.id) ? " sel" : "");
     el.draggable = true; el.dataset.id = L.id;
-    const tag = L.type === "raster" ? (L.kind || "img") : L.type === "callout" ? "text" : "dot";
+    const tag = L.type === "raster" ? (L.kind || "img")
+      : L.type === "callout" ? "text"
+      : L.type === "path" ? (L.kind === "polygon" ? "area" : L.kind === "segment" ? "seg" : "line")
+      : "dot";
     el.innerHTML =
       '<div class="top">' +
         '<span class="grip">&#8942;&#8942;</span>' +
@@ -2081,6 +2557,7 @@ function renderLayers() {
     el.addEventListener("drop", ev => {
       ev.preventDefault(); el.classList.remove("over");
       if (!dragRow || dragRow === L.id) return;
+      pushUndo();
       const from = layers.findIndex(x => x.id === dragRow);
       const [m] = layers.splice(from, 1);
       const to = layers.findIndex(x => x.id === L.id);
@@ -2152,6 +2629,43 @@ function renderProps() {
         '<label class="hint" style="flex:1 1 auto;display:flex;gap:6px;align-items:center">' +
         '<input type="checkbox" id="pLeader" ' + (L.leader ? "checked" : "") + ' style="width:auto">Leader line</label></div>' +
       '<div class="hint">Double-click the box on the map to edit text there. Drag the amber diamond to aim the leader.</div>';
+  } else if (L.type === "path") {
+    extra =
+      '<div class="row"><label class="f">Preset</label><select id="pPreset">' +
+        '<option value="">Site figure style&hellip;</option>' +
+        '<option value="property">Property line</option>' +
+        '<option value="excav">Excavation limit</option>' +
+        '<option value="utility">Utility</option>' +
+        '<option value="gwf">Groundwater flow</option>' +
+        '<option value="section">Section line</option>' +
+        '<option value="plume">Plume / exceedance</option>' +
+        '<option value="source">Source area</option>' +
+      '</select></div>' +
+      '<div class="row"><label class="f">Stroke</label><input type="color" id="pStroke" value="' + L.stroke + '">' +
+        '<input type="number" id="pSw" step="0.25" min="0.25" value="' + L.strokeW + '"><span class="hint">pt</span></div>' +
+      '<div class="row"><label class="f">Dash</label><select id="pDash">' +
+        '<option value="solid"' + (L.dash === "solid" ? " selected" : "") + '>Solid</option>' +
+        '<option value="dash"' + (L.dash === "dash" ? " selected" : "") + '>Dash</option>' +
+        '<option value="dot"' + (L.dash === "dot" ? " selected" : "") + '>Dot</option>' +
+        '<option value="dashdot"' + (L.dash === "dashdot" ? " selected" : "") + '>Dash-dot</option>' +
+      '</select></div>' +
+      (pathIsClosed(L)
+        ? '<div class="row"><label class="f">Fill</label><input type="color" id="pFill" value="' + (L.fill || "#9b59b6") + '">' +
+          '<input type="number" id="pFo" step="0.05" min="0" max="1" value="' + (+(L.fillOpacity || 0).toFixed(2)) + '"><span class="hint">opacity</span></div>'
+        : '<div class="row"><label class="f">Arrows</label><select id="pArrows">' +
+          '<option value="none"' + (L.arrows === "none" ? " selected" : "") + '>None</option>' +
+          '<option value="end"' + (L.arrows === "end" ? " selected" : "") + '>End</option>' +
+          '<option value="start"' + (L.arrows === "start" ? " selected" : "") + '>Start</option>' +
+          '<option value="both"' + (L.arrows === "both" ? " selected" : "") + '>Both</option>' +
+        '</select></div>' +
+        '<div class="row"><label class="f">End caps</label><select id="pCaps">' +
+          '<option value="none"' + (L.endCaps === "none" ? " selected" : "") + '>None</option>' +
+          '<option value="tick"' + (L.endCaps === "tick" ? " selected" : "") + '>Section ticks</option>' +
+        '</select></div>') +
+      '<div class="row"><label class="f">Label</label><input type="text" id="pLabel" value="' + esc(L.label || "") + '"></div>' +
+      '<div class="row"><label class="f">Label type</label><input type="number" id="pFont" step="1" min="6" value="' + (L.fontSize || 11) + '">' +
+        '<input type="color" id="pColor" value="' + (L.color || "#111111") + '"></div>' +
+      '<div class="hint">' + (L.pts ? L.pts.length : 0) + ' vertices. Drag squares to move corners, amber diamonds to add one. Alt-click a square to remove it.</div>';
   } else {
     extra =
       '<div class="row"><label class="f">Symbol</label>' + shapeOptions("pShape", L.shape) + '</div>' +
@@ -2210,6 +2724,23 @@ function renderProps() {
     on("#fM", "click", () => setF(L.fontSize - 1)); on("#fP", "click", () => setF(L.fontSize + 1));
     const al = $("#pAlign"); if (al) { al.value = L.align; al.addEventListener("change", () => { L.align = al.value; draw(); }); }
     on("#pLeader", "change", e => { L.leader = e.target.checked; draw(); });
+  } else if (L.type === "path") {
+    let painted = false;
+    const paint = () => { if (!painted) { pushUndo(); painted = true; } };
+    on("#pPreset", "change", e => {
+      if (!e.target.value) return;
+      pushUndo(); applyPathPreset(L, e.target.value); renderLayers(); renderProps(); draw();
+    });
+    on("#pStroke", "input", e => { paint(); L.stroke = e.target.value; rememberPathStyle(L); draw(); });
+    on("#pSw", "input", e => { paint(); L.strokeW = Math.max(0.25, +e.target.value || 1); rememberPathStyle(L); draw(); });
+    on("#pDash", "change", e => { paint(); L.dash = e.target.value; rememberPathStyle(L); draw(); });
+    on("#pFill", "input", e => { paint(); L.fill = e.target.value; rememberPathStyle(L); draw(); });
+    on("#pFo", "input", e => { paint(); L.fillOpacity = clamp(+e.target.value || 0, 0, 1); rememberPathStyle(L); draw(); });
+    on("#pArrows", "change", e => { paint(); L.arrows = e.target.value; rememberPathStyle(L); draw(); });
+    on("#pCaps", "change", e => { paint(); L.endCaps = e.target.value; rememberPathStyle(L); draw(); });
+    on("#pLabel", "input", e => { paint(); L.label = e.target.value; rememberPathStyle(L); draw(); });
+    on("#pColor", "input", e => { paint(); L.color = e.target.value; rememberPathStyle(L); draw(); });
+    on("#pFont", "input", e => { paint(); L.fontSize = clamp(+e.target.value || 11, 6, 400); rememberPathStyle(L); draw(); });
   } else {
     const setR = v => { L.r = clamp(v, 1, 400); syncNum("#pR", +L.r.toFixed(1)); draw(); };
     on("#pR", "input", e => { L.r = clamp(+e.target.value || 6, 1, 400); draw(); });
@@ -2247,10 +2778,12 @@ function shapeOptionsInner(current, placeholder) {
 function renderMultiProps(box) {
   const g = selLayers();
   const marks = g.filter(l => l.type === "marker"), calls = g.filter(l => l.type === "callout");
-  const first = marks[0] || calls[0] || g[0];
+  const paths = g.filter(l => l.type === "path");
+  const first = marks[0] || calls[0] || paths[0] || g[0];
   let html = '<div class="multi">' + g.length + " items selected" +
     (marks.length ? " &middot; " + marks.length + " dot" + (marks.length > 1 ? "s" : "") : "") +
     (calls.length ? " &middot; " + calls.length + " callout" + (calls.length > 1 ? "s" : "") : "") +
+    (paths.length ? " &middot; " + paths.length + " line" + (paths.length > 1 ? "s" : "") : "") +
     "</div>";
   if (marks.length) {
     html += '<div class="row"><label class="f">Dot fill</label><input type="color" id="mFill" value="' + marks[0].fill + '">' +
@@ -2261,6 +2794,10 @@ function renderMultiProps(box) {
     html += '<div class="row"><label class="f">Box fill</label><input type="color" id="kFill" value="' + calls[0].fill + '"></div>' +
       '<div class="row"><label class="f">Lines</label><input type="color" id="kBorder" value="' + calls[0].border + '"></div>' +
       '<div class="row"><label class="f">Text</label><input type="color" id="kColor" value="' + calls[0].color + '"></div>';
+  }
+  if (paths.length) {
+    html += '<div class="row"><label class="f">Stroke</label><input type="color" id="qStroke" value="' + paths[0].stroke + '">' +
+      '<select id="qDash" style="flex:1 1 auto"><option value="">Dash unchanged</option><option value="solid">Solid</option><option value="dash">Dash</option><option value="dot">Dot</option><option value="dashdot">Dash-dot</option></select></div>';
   }
   html += '<div class="row"><label class="f">Opacity</label><input type="range" id="mOpacity" min="0" max="100" value="' +
     Math.round((first ? first.opacity : 1) * 100) + '"><span class="opv" id="mOpV"></span></div>' +
@@ -2275,6 +2812,8 @@ function renderMultiProps(box) {
   on("#kFill", "input", e => set(calls, "fill", e.target.value));
   on("#kBorder", "input", e => set(calls, "border", e.target.value));
   on("#kColor", "input", e => set(calls, "color", e.target.value));
+  on("#qStroke", "input", e => set(paths, "stroke", e.target.value));
+  on("#qDash", "change", e => { if (e.target.value) set(paths, "dash", e.target.value); });
   on("#mOpacity", "input", e => {
     set(g, "opacity", (+e.target.value) / 100);
     $("#mOpV").textContent = e.target.value + "%"; renderLayers();
@@ -2286,16 +2825,33 @@ function renderMultiProps(box) {
 /* ------------------- click-to-place & global sizes ----------------- */
 const TIP_IDLE = "Drop a PDF, TIFF or image to begin";
 function setPlaceMode(m) {
+  if (!m) sketch = null;
   placeMode = m;
   const tips = $("#tips");
   $("#bMarker").classList.toggle("on", !!m && m.kind === "marker" && !m.shape);
   $("#bCallout").classList.toggle("on", !!m && m.kind === "callout");
+  $("#bLine").classList.toggle("on", !!m && m.kind === "path" && m.shape === "line");
+  $("#bSeg").classList.toggle("on", !!m && m.kind === "path" && m.shape === "segment");
+  $("#bPoly").classList.toggle("on", !!m && m.kind === "path" && m.shape === "polygon");
   if (!m) {
     $("#symSel").value = "";
     tips.classList.remove("act");
     tips.textContent = TIP_IDLE;
     tips.style.display = layers.length ? "none" : "block";
     cv.style.cursor = "default";
+    draw();
+    return;
+  }
+  if (m.kind === "path") {
+    const msg = m.shape === "line"
+      ? "Click two points for a line \u2014 Shift locks 45\u00b0 \u2014 Esc to cancel"
+      : m.shape === "segment"
+        ? "Click each corner of the segment line \u2014 Enter or right-click to finish \u2014 Esc to cancel"
+        : "Click each corner of the polygon \u2014 click the first point, Enter or right-click to close \u2014 Esc to cancel";
+    tips.textContent = msg;
+    tips.classList.add("act");
+    tips.style.display = "block";
+    cv.style.cursor = "crosshair";
     return;
   }
   tips.textContent = m.kind === "callout"
@@ -2312,6 +2868,18 @@ function setMarkerScale(v) {
 function setCalloutScale(v) {
   calloutScale = clamp(v, 0.05, 200);
   syncNum("#cSize", +calloutScale.toFixed(2)); draw(); renderProps();
+}
+function setPathScale(v) {
+  pathScale = clamp(v, 0.05, 200);
+  syncNum("#lSize", +pathScale.toFixed(2)); draw(); renderProps();
+}
+function togglePathTool(kind) {
+  if (placeMode && placeMode.kind === "path" && placeMode.shape === kind && !sketch) {
+    setPlaceMode(null);
+    return;
+  }
+  sketch = null;
+  setPlaceMode({ kind: "path", shape: kind });
 }
 const sizeStep = (v, dir) => Math.max(0.05, +(v + dir * (v >= 2 ? 0.25 : 0.1)).toFixed(2));
 
@@ -2467,6 +3035,9 @@ $("#bCallout").addEventListener("click", () => {
 $("#bMarker").addEventListener("click", () => {
   setPlaceMode(placeMode && placeMode.kind === "marker" && !placeMode.shape ? null : { kind: "marker" });
 });
+$("#bLine").addEventListener("click", () => togglePathTool("line"));
+$("#bSeg").addEventListener("click", () => togglePathTool("segment"));
+$("#bPoly").addEventListener("click", () => togglePathTool("polygon"));
 $("#symSel").innerHTML = shapeOptionsInner(null, "Add a symbol\u2026");
 $("#symSel").addEventListener("change", e => {
   if (!e.target.value) { setPlaceMode(null); return; }
@@ -2480,6 +3051,9 @@ $("#mSup").addEventListener("click", () => setMarkerScale(sizeStep(markerScale, 
 $("#cSize").addEventListener("input", e => { calloutScale = clamp(+e.target.value || 1, 0.05, 200); draw(); });
 $("#cSdn").addEventListener("click", () => setCalloutScale(sizeStep(calloutScale, -1)));
 $("#cSup").addEventListener("click", () => setCalloutScale(sizeStep(calloutScale, 1)));
+$("#lSize").addEventListener("input", e => { pathScale = clamp(+e.target.value || 1, 0.05, 200); draw(); });
+$("#lSdn").addEventListener("click", () => setPathScale(sizeStep(pathScale, -1)));
+$("#lSup").addEventListener("click", () => setPathScale(sizeStep(pathScale, 1)));
 
 addEventListener("paste", async e => {
   const items = e.clipboardData ? e.clipboardData.items : null; if (!items) return;
@@ -2512,11 +3086,24 @@ $("#pgPreset").addEventListener("change", e => {
 $("#pgW").addEventListener("input", e => { page.w = clamp(+e.target.value || 72, 72, 20000); applyPage(); });
 $("#pgH").addEventListener("input", e => { page.h = clamp(+e.target.value || 72, 72, 20000); applyPage(); });
 $("#pgBg").addEventListener("input", e => { page.bg = e.target.value; draw(); });
+function layerWorldBox(L) {
+  if (L.type === "path" && L.pts && L.pts.length) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of L.pts) {
+      const w = toWorld(L, p);
+      if (w.x < x0) x0 = w.x; if (w.y < y0) y0 = w.y;
+      if (w.x > x1) x1 = w.x; if (w.y > y1) y1 = w.y;
+    }
+    return { x: x0, y: y0, w: Math.max(8, x1 - x0), h: Math.max(8, y1 - y0) };
+  }
+  const { hw, hh } = halfSize(L);
+  return { x: L.x - hw, y: L.y - hh, w: hw * 2, h: hh * 2 };
+}
 $("#bFitSel").addEventListener("click", () => {
   const L = sel(); if (!L) { toast("Select a layer first."); return; }
-  const { hw, hh } = halfSize(L);
-  page.w = Math.round(hw * 2); page.h = Math.round(hh * 2);
-  const dx = L.x - hw, dy = L.y - hh;
+  const b = layerWorldBox(L);
+  page.w = Math.round(b.w); page.h = Math.round(b.h);
+  const dx = b.x, dy = b.y;
   for (const l of layers) { l.x -= dx; l.y -= dy; }
   applyPage(); fit(); renderProps();
 });
@@ -2587,7 +3174,7 @@ function serialize(withImages) {
     page: { w: page.w, h: page.h, bg: page.bg },
     view: { scale: view.scale, ox: view.ox, oy: view.oy },
     ui: { contents: contentsColor, ghost: showGhost, quality: $("#expQ").value,
-          markerScale: markerScale, calloutScale: calloutScale },
+          markerScale: markerScale, calloutScale: calloutScale, pathScale: pathScale },
     layers: layers.map(L => {
       const o = Object.assign({}, L);
       delete o.src;
@@ -2618,8 +3205,8 @@ async function applyData(d, label) {
     setContentsColor(d.ui.contents || CONTENTS_DEFAULT);
     if (typeof d.ui.ghost === "boolean") { showGhost = d.ui.ghost; $("#tGhost").style.color = showGhost ? "var(--acc)" : ""; }
     if (d.ui.quality) $("#expQ").value = d.ui.quality;
-    markerScale = d.ui.markerScale || 1; calloutScale = d.ui.calloutScale || 1;
-    syncNum("#mSize", +markerScale.toFixed(2)); syncNum("#cSize", +calloutScale.toFixed(2));
+    markerScale = d.ui.markerScale || 1; calloutScale = d.ui.calloutScale || 1; pathScale = d.ui.pathScale || 1;
+    syncNum("#mSize", +markerScale.toFixed(2)); syncNum("#cSize", +calloutScale.toFixed(2)); syncNum("#lSize", +pathScale.toFixed(2));
   }
   $("#pgBg").value = page.bg;
   applyPage(); renderLayers(); renderProps();
